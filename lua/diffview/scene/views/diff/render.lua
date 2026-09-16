@@ -161,7 +161,13 @@ local function render_file(conf, panel, comp, show_path, depth, sign_pad)
 
   comp:add_text(file.basename, name_hl)
 
-  if file.stats then
+  if file.merge_conflicts_remaining ~= nil then
+    local has_conflicts = file.merge_conflicts_remaining > 0
+    comp:add_text(
+      " " .. (has_conflicts and file.merge_conflicts_remaining or conf.signs.done),
+      has_conflicts and "DiffviewFilePanelConflicts" or "DiffviewFilePanelInsertions"
+    )
+  elseif file.stats then
     if file.stats.additions then
       comp:add_text(" ")
       comp:add_text(tostring(file.stats.additions), "DiffviewFilePanelInsertions")
@@ -176,7 +182,11 @@ local function render_file(conf, panel, comp, show_path, depth, sign_pad)
     end
   end
 
-  if file.kind == "conflicting" and not (file.stats and file.stats.conflicts) then
+  if
+    file.kind == "conflicting"
+    and file.merge_conflicts_remaining == nil
+    and not (file.stats and file.stats.conflicts)
+  then
     comp:add_text(" !", "DiffviewFilePanelConflicts")
   end
 

@@ -1299,6 +1299,27 @@ describe("panel_render", function()
       eq("basename", config.get_config().file_panel.list_options.path_style)
     end)
 
+    it("renders the transactional remaining count instead of stale marker stats", function()
+      local entry = make_entry("README.md", "conflicting", "U")
+      entry.stats = { conflicts = 0 }
+      entry.merge_conflicts_remaining = 3
+      local comp = make_file_comp(entry)
+      render_file(config.get_config(), make_panel_stub(), comp, true, nil, nil)
+
+      eq({ " 3" }, comp:segments_by_hl("DiffviewFilePanelConflicts"))
+      assert.is_nil(comp:flat_text():find(config.get_config().signs.done, 1, true))
+    end)
+
+    it("renders the done sign only after a transactional file reaches zero", function()
+      local entry = make_entry("README.md", "conflicting", "U")
+      entry.stats = { conflicts = 0 }
+      entry.merge_conflicts_remaining = 0
+      local comp = make_file_comp(entry)
+      render_file(config.get_config(), make_panel_stub(), comp, true, nil, nil)
+
+      assert.truthy(comp:flat_text():find(config.get_config().signs.done, 1, true))
+    end)
+
     describe("'basename' (default)", function()
       it("appends a dimmed parent path after the basename for files in subdirectories", function()
         local conf = config.get_config()

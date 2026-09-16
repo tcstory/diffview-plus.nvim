@@ -78,6 +78,8 @@ local pl = lazy.access(utils, "path") --[[@as PathLib ]]
 ---@field conflict_choose fun(target: DiffviewConflictTarget): fun()
 ---@field conflict_choose_all fun(target: DiffviewConflictTarget): AsyncFunc
 ---@field conflict_choose_side fun(target: DiffviewConflictSideTarget): AsyncFunc
+---@field merge_mark_resolved fun()
+---@field merge_apply fun()
 ---@field cycle_layout fun()
 ---@field diff_against_default_branch fun()
 ---@field diffget fun(target: DiffviewDiffgetTarget): fun()
@@ -419,6 +421,10 @@ end
 function M.jumpto_conflict(num, use_delta)
   local view = lib.get_current_view()
 
+  if view and view.merge_session and view.jump_conflict then
+    return view:jump_conflict(use_delta and num or (num >= 0 and 1 or -1))
+  end
+
   if view and view:instanceof(StandardView.__get()) then
     ---@cast view StandardView
     local main, bufnr = get_valid_main(view)
@@ -725,6 +731,11 @@ function M.conflict_choose_all(target)
       if view and view:instanceof(DiffView.__get()) then
         ---@cast view DiffView
 
+        if view.merge_session and view.choose_all_conflicts then
+          view:choose_all_conflicts(target)
+          return
+        end
+
         if view.panel:is_focused() then
           local item = view:infer_cur_file(false) ---@cast item -DirData
           if not item then
@@ -749,6 +760,11 @@ end
 function M.conflict_choose(target)
   return tag(function()
     local view = lib.get_current_view()
+
+    if view and view.merge_session and view.choose_conflict then
+      view:choose_conflict(target)
+      return
+    end
 
     if view and view:instanceof(StandardView.__get()) then
       ---@cast view StandardView
@@ -786,6 +802,22 @@ function M.conflict_choose(target)
     end
   end, "merge_only")
 end
+
+function M.merge_mark_resolved()
+  local view = lib.get_current_view()
+  if view and view.merge_session and view.choose_conflict then
+    view:choose_conflict("manual")
+  end
+end
+tag(M.merge_mark_resolved, "merge_only")
+
+function M.merge_apply()
+  local view = lib.get_current_view()
+  if view and view.merge_session and view.apply_all then
+    view:apply_all()
+  end
+end
+tag(M.merge_apply, "merge_only")
 
 ---Replace the entire MERGED buffer with the content of the OURS, THEIRS, or
 ---BASE side. Unlike `conflict_choose_all`, this does not parse conflict
@@ -840,6 +872,17 @@ end
 ---@return fun()
 function M.diffget(target)
   return function()
+    local view = lib.get_current_view()
+    if
+      view
+      and view.merge_session
+      and view.choose_conflict
+      and (target == "ours" or target == "theirs" or target == "base")
+    then
+      view:choose_conflict(target)
+      return
+    end
+
     local bufnr = diff_copy_target(target)
 
     if bufnr and api.nvim_buf_is_valid(bufnr) then

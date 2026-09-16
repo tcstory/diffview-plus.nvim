@@ -32,6 +32,14 @@ Configure log options under `file_history_panel.log_options.jj` the
 same way as `git`/`hg`. Supported flags: `--revisions <revset>`,
 `--limit <n>`, `--reversed`.
 
+                                                *diffview.changelog-transactional-merge*
+
+`:DiffviewMergeOpen [paths...]` adds a transactional, WebStorm-style Git
+conflict resolver. It keeps an independent RESULT buffer for every conflicted
+file, tracks unresolved regions without visible conflict markers, shows
+session/file conflict counts, and writes all results only when the explicit
+Apply Changes action succeeds.
+
 Staging-related actions (`s`/`S`/`U`, restoring from "staged") are
 no-ops in jj — there is no staging index. The adapter surfaces a
 one-time warning when these are invoked instead of failing silently.

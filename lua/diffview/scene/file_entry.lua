@@ -52,6 +52,7 @@ end
 ---@field layout Layout
 ---@field status string
 ---@field stats? GitStats
+---@field merge_conflicts_remaining? integer # Transactional merge count; independent of marker-based stats.
 ---@field kind vcs.FileKind
 ---@field commit Commit|nil
 ---@field merge_ctx vcs.MergeContext?
@@ -68,6 +69,7 @@ local FileEntry = oop.create_class("FileEntry")
 ---@field layout? Layout
 ---@field status? string
 ---@field stats? GitStats
+---@field merge_conflicts_remaining? integer
 ---@field kind vcs.FileKind
 ---@field commit? Commit
 ---@field merge_ctx? vcs.MergeContext
@@ -87,6 +89,7 @@ function FileEntry:init(opt)
   self.layout = opt.layout
   self.status = opt.status
   self.stats = opt.stats
+  self.merge_conflicts_remaining = opt.merge_conflicts_remaining
   self.kind = opt.kind
   self.commit = opt.commit
   self.merge_ctx = opt.merge_ctx

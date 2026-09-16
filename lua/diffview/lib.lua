@@ -8,6 +8,7 @@ local FileDiffView = lazy.access("diffview.scene.views.diff.file_diff_view", "Fi
 local FileDirDiffView =
   lazy.access("diffview.scene.views.diff.file_dir_diff_view", "FileDirDiffView") ---@type FileDirDiffView|LazyModule
 local FileMergeView = lazy.access("diffview.scene.views.diff.file_merge_view", "FileMergeView") ---@type FileMergeView|LazyModule
+local MergeView = lazy.access("diffview.scene.views.diff.merge_view", "MergeView") ---@type MergeView|LazyModule
 local FileHistoryView =
   lazy.access("diffview.scene.views.file_history.file_history_view", "FileHistoryView") ---@type FileHistoryView|LazyModule
 local GitAdapter = lazy.access("diffview.vcs.adapters.git", "GitAdapter") ---@type GitAdapter|LazyModule
@@ -128,6 +129,68 @@ function M.diffview_open(args)
   logger:debug("DiffView instantiation successful!")
 
   return v
+end
+
+---@param args string[] Optional pathspecs limiting the conflicted files.
+function M.diffview_merge_open(args)
+  logger:info("[command call] :DiffviewMergeOpen " .. table.concat(args, " "))
+
+  local err, adapter = vcs.get_adapter({
+    cmd_ctx = { path_args = args },
+  })
+  if err then
+    utils.err(err)
+    return
+  end
+  ---@cast adapter -?
+
+  if not adapter:instanceof(GitAdapter.__get()) then
+    utils.err(":DiffviewMergeOpen currently supports Git repositories only.")
+    return
+  end
+
+  for _, view in ipairs(M.views) do
+    if
+      view.merge_session
+      and view.adapter.ctx.toplevel == adapter.ctx.toplevel
+      and view.tabpage
+      and api.nvim_tabpage_is_valid(view.tabpage)
+    then
+      api.nvim_set_current_tabpage(view.tabpage)
+      return view
+    end
+  end
+
+  local cmd = { "diff", "--name-only", "--diff-filter=U" }
+  if #adapter.ctx.path_args > 0 then
+    vim.list_extend(cmd, { "--" })
+    vim.list_extend(cmd, adapter.ctx.path_args)
+  end
+  local paths, code, stderr = adapter:exec_sync(cmd, {
+    cwd = adapter.ctx.toplevel,
+    silent = true,
+  })
+  if code ~= 0 then
+    utils.err(utils.vec_join("Unable to list conflicted files.", stderr))
+    return
+  end
+  if #paths == 0 then
+    utils.info("No conflicted files found.")
+    return
+  end
+
+  local ok, view = pcall(MergeView, { adapter = adapter, paths = paths })
+  if not ok then
+    utils.err("Unable to create transactional merge view: " .. tostring(view))
+    return
+  end
+  if not view:is_valid() then
+    return
+  end
+
+  table.insert(M.views, view)
+  logger:debug("Transactional MergeView instantiation successful!")
+  return view
 end
 
 ---@param range? { [1]: integer, [2]: integer }

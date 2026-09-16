@@ -104,6 +104,7 @@ and committing workflows.
 | Command | Description |
 |---|---|
 | `:DiffviewOpen [rev] [options] [ -- {paths...}]` | Open a diff view |
+| `:DiffviewMergeOpen [paths...]` | Open a transactional Git conflict resolver (`OURS | RESULT | THEIRS`) |
 | `:DiffviewFileHistory [paths] [options]` | Browse file/commit history |
 | `:DiffviewDiffFiles {file1} {file2}` | Diff two arbitrary files |
 | `:DiffviewMergeFiles {output} [{base}] {left} {right}` | 3-way / 4-way merge editor (no VCS required) |

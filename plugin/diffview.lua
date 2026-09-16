@@ -28,6 +28,10 @@ command("DiffviewOpen", function(ctx)
   diffview.open(arg_parser.scan(ctx.args).args)
 end, { nargs = "*", complete = completion })
 
+command("DiffviewMergeOpen", function(ctx)
+  diffview.merge_open(arg_parser.scan(ctx.args).args)
+end, { nargs = "*", complete = completion })
+
 command("DiffviewToggle", function(ctx)
   diffview.toggle(arg_parser.scan(ctx.args).args)
 end, { nargs = "*", complete = completion })

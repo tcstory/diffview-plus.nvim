@@ -124,6 +124,8 @@ local conflict_keymaps = {
   { "n", "<leader>cso", actions.conflict_choose_side("ours"),   { desc = "Replace the MERGED buffer with the entire OURS side" } },
   { "n", "<leader>cst", actions.conflict_choose_side("theirs"), { desc = "Replace the MERGED buffer with the entire THEIRS side" } },
   { "n", "<leader>csb", actions.conflict_choose_side("base"),   { desc = "Replace the MERGED buffer with the entire BASE side" } },
+  { "n", "<leader>cr",  actions.merge_mark_resolved,            { desc = "Mark the current transactional conflict resolved" } },
+  { "n", "<leader>ma",  actions.merge_apply,                    { desc = "Apply all transactional merge results" } },
 }
 
 ---@class DiffviewConfig

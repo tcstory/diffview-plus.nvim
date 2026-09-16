@@ -38,6 +38,9 @@ local M = {}
 ---@field loaded boolean # True once the buffer's content is fully populated. Required by `is_valid()` to distinguish a fully-loaded buffer from a mid-load placeholder.
 ---@field ready boolean
 ---@field winbar string?
+---@field editable boolean # Make a non-LOCAL buffer editable without binding it to the working tree.
+---@field buffer_context? string # Override the URI context used for non-LOCAL buffers.
+---@field on_write? fun(file: vcs.File) # Handles :write for editable virtual buffers.
 ---@field winopts WindowOptions
 ---@field _orig_ts_context_disable? boolean # Saved `ts_context_disable` before diffview overrode it.
 ---@field _orig_context_enabled? boolean # Saved `context_enabled` before diffview overrode it.
@@ -84,6 +87,9 @@ function File:init(opt)
   self.commit = opt.commit
   self.symbol = opt.symbol
   self.get_data = opt.get_data
+  self.editable = not not opt.editable
+  self.buffer_context = opt.buffer_context
+  self.on_write = opt.on_write
   self.active = true
   self.loaded = false
   self.ready = false
@@ -315,12 +321,12 @@ File.create_buffer = async.wrap(function(self, callback)
       end
     end
 
-    local context
-    if self.rev.type == RevType.COMMIT then
+    local context = self.buffer_context
+    if not context and self.rev.type == RevType.COMMIT then
       context = self.rev:abbrev(11)
-    elseif self.rev.type == RevType.STAGE then
+    elseif not context and self.rev.type == RevType.STAGE then
       context = fmt(":%d:", self.rev.stage)
-    elseif self.rev.type == RevType.CUSTOM then
+    elseif not context and self.rev.type == RevType.CUSTOM then
       context = "[custom]"
     end
 
@@ -385,6 +391,20 @@ File.create_buffer = async.wrap(function(self, callback)
         nested = true,
         callback = function()
           self.adapter:stage_index_file(self)
+        end,
+      })
+    elseif self.editable then
+      bufopts.modifiable = true
+      bufopts.buftype = "acwrite"
+      bufopts.undolevels = nil
+
+      api.nvim_create_autocmd("BufWriteCmd", {
+        buffer = self.bufnr,
+        nested = true,
+        callback = function()
+          if self.on_write then
+            self.on_write(self)
+          end
         end,
       })
     end

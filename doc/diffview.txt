@@ -205,6 +205,44 @@ COMMANDS                                        *diffview-commands*
                         NOTE: This is Git-specific. For Jujutsu, this option
                         is ignored with a warning.
 
+                                                *:DiffviewMergeOpen*
+:DiffviewMergeOpen [paths...]
+
+        Opens a transactional three-way conflict resolver for the current
+        Git repository. Optional pathspecs limit the conflicted files shown.
+
+        The layout is `OURS | RESULT | THEIRS`. OURS and THEIRS are read-only;
+        RESULT is an in-memory buffer initialized from Git's automatic
+        three-way merge, with unresolved regions showing their BASE content.
+        Opening and editing RESULT never modifies the working tree.
+
+        To keep the three-pane view visually focused, this view suppresses
+        the broad DiffChange line background while preserving precise
+        DiffText, additions/deletions, and explicit Unresolved indicators.
+
+        Each unresolved region is tracked independently instead of relying on
+        conflict-marker text. The file panel and RESULT winbar show the
+        remaining conflict count. Use the normal conflict mappings:
+
+          <leader>co / 2do    choose OURS
+          <leader>ct / 3do    choose THEIRS
+          <leader>cb          choose BASE
+          <leader>cr          mark a manually edited region resolved
+          [x / ]x             previous / next unresolved region
+
+        The file-panel winbar exposes a clickable [ ◀ ] Hide files control.
+        It collapses the panel into a narrow left-side rail whose [ ▶ ]
+        control restores the list. The RESULT winbar provides OURS, THEIRS,
+        and [ APPLY ] actions. Apply is
+        refused until every conflict is resolved. Once confirmed, all Result
+        buffers are written to the working tree together. If any target file
+        changed outside the session, nothing is written.
+
+        `:DiffviewClose` refuses to discard an unapplied merge session;
+        `:DiffviewClose!` explicitly discards it. This command currently
+        supports Git repositories only and does not stage (`git add`) the
+        resulting files.
+
                                                 *:DiffviewDiffFiles*
 :DiffviewDiffFiles {file1} {file2}
 

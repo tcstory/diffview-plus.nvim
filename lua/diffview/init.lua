@@ -155,6 +155,14 @@ function M.open(args)
   end
 end
 
+---@param args string[]
+function M.merge_open(args)
+  local view = lib.diffview_merge_open(args)
+  if view and not (view.tabpage and api.nvim_tabpage_is_valid(view.tabpage)) then
+    view:open()
+  end
+end
+
 ---@param range? { [1]: integer, [2]: integer }
 ---@param args string[]
 function M.file_history(range, args)
@@ -254,6 +262,11 @@ function M.get_adapter()
 end
 
 M.completers = {
+  DiffviewMergeOpen = function(ctx)
+    local adapter = M.get_adapter()
+    return adapter and adapter:path_candidates(ctx.arg_lead)
+      or vim.fn.getcompletion(ctx.arg_lead, "file", false)
+  end,
   ---@param ctx CmdLineContext
   DiffviewOpen = function(ctx)
     local has_rev_arg = false
