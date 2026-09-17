@@ -2,6 +2,7 @@ local lazy = require("diffview.lazy")
 local oop = require("diffview.oop")
 
 local Diff3Hor = lazy.access("diffview.scene.layouts.diff_3_hor", "Diff3Hor") ---@type Diff3Hor|LazyModule
+local DiffView = lazy.access("diffview.scene.views.diff.diff_view", "DiffView") ---@type DiffView|LazyModule
 local File = lazy.access("diffview.vcs.file", "File") ---@type vcs.File|LazyModule
 local FileEntry = lazy.access("diffview.scene.file_entry", "FileEntry") ---@type FileEntry|LazyModule
 local MergeSession = lazy.access("diffview.merge_session", "MergeSession") ---@type MergeSession|LazyModule
@@ -128,12 +129,33 @@ function MergeView:init_layout()
   StandardView.__get().init_layout(self)
 end
 
+---@override
+function MergeView:post_open()
+  DiffView.__get().post_open(self)
+  local first = self.files.conflicting and self.files.conflicting[1]
+  if first then
+    self:set_file(first)
+  end
+end
+
+---@override
+function MergeView:update_files(opts, callback)
+  self.panel:render()
+  self.panel:redraw()
+  if type(callback) == "function" then
+    callback()
+  end
+end
+
 ---@param entry FileEntry
 function MergeView:attach_result_entry(entry)
   if entry.kind ~= "conflicting" then
     return
   end
-  local main = entry.layout:get_main_win()
+  local main = self.cur_layout and self.cur_layout:get_main_win()
+  if not (main and main.file and main.file.bufnr) then
+    main = entry.layout and entry.layout:get_main_win()
+  end
   if main and main.file and main.file.bufnr then
     self.merge_session:attach(entry.path, main.file.bufnr, entry)
     self:_install_click_handlers()
@@ -361,8 +383,9 @@ function MergeView:jump_conflict(delta)
   local target, index = self.merge_session:jump(self.cur_entry.path, row, delta)
   if target then
     api.nvim_set_current_win(main.id)
-    api.nvim_win_set_cursor(main.id, { target, 0 })
     self.cur_layout:sync_scroll()
+    api.nvim_win_set_cursor(main.id, { target, 0 })
+    pcall(vim.cmd, "normal! zvzz")
     local current = assert(self.merge_session:get(self.cur_entry.path))
     api.nvim_echo({ {
       ("Unresolved conflict [%d/%d]"):format(index, self.merge_session:entry_remaining(current)),
