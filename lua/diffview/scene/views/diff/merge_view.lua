@@ -156,18 +156,25 @@ function MergeView:_install_click_handlers()
 
   for _, bufnr in ipairs(bufs) do
     vim.keymap.set("n", "<LeftMouse>", function()
-      self:_handle_left_mouse()
-    end, { buffer = bufnr, silent = true, nowait = true })
+      if self:_handle_left_mouse() then
+        return ""
+      end
+      return "<LeftMouse>"
+    end, { buffer = bufnr, expr = true, silent = true, nowait = true })
   end
 end
 
 function MergeView:_handle_left_mouse()
   local mouse = vim.fn.getmousepos()
+  if mouse.line <= 0 or mouse.column <= 0 or mouse.winid <= 0 then
+    return false
+  end
+
   local cur_main = self.cur_layout and self.cur_layout:get_main_win()
   local result_win = cur_main and cur_main.id
   local entry = self.cur_entry
 
-  if result_win and mouse.winid == result_win and mouse.line > 0 and entry then
+  if result_win and mouse.winid == result_win and entry then
     local current = self.merge_session:get(entry.path)
     if current then
       local conflict_on_line
@@ -206,22 +213,18 @@ function MergeView:_handle_left_mouse()
           if offset >= ours_start and offset <= ours_end + 1 then
             self.merge_session:choose(entry.path, conflict_on_line, "ours")
             self.cur_layout:sync_scroll()
-            return
+            return true
           elseif offset > ours_end + 1 and offset <= theirs_end + 2 then
             self.merge_session:choose(entry.path, conflict_on_line, "theirs")
             self.cur_layout:sync_scroll()
-            return
+            return true
           end
         end
       end
     end
   end
 
-  local m = vim.fn.getmousepos()
-  if m.winid > 0 and api.nvim_win_is_valid(m.winid) then
-    api.nvim_set_current_win(m.winid)
-    pcall(api.nvim_win_set_cursor, m.winid, { m.line, math.max(0, m.column - 1) })
-  end
+  return false
 end
 
 function MergeView:update_merge_ui()
@@ -240,9 +243,15 @@ function MergeView:update_merge_ui()
     local apply_label = unresolved == 0
       and "%%#DiffviewFilePanelInsertions#%%@v:lua.DiffviewMergeApplyClick@[ ✔ APPLY CHANGES ]%%X%%*"
       or "%%@v:lua.DiffviewMergeApplyClick@[ APPLY ]%%X"
+    local ours_label = "%%#DiffviewFilePanelInsertions#%%@v:lua.DiffviewMergeOursClick@[ OURS ]%%X%%*"
+    local theirs_label = "%%#DiffviewFilePanelDeletions#%%@v:lua.DiffviewMergeTheirsClick@[ THEIRS ]%%X%%*"
     entry.layout.b.file.winbar = (
       "RESULT  "
       .. apply_label
+      .. "  "
+      .. ours_label
+      .. " "
+      .. theirs_label
       .. "  FILE %d/%d unresolved | ALL %d/%d"
     ):format(file_remaining, file_total, unresolved, total)
     local winid = self.cur_layout and self.cur_layout.b and self.cur_layout.b.id
@@ -254,6 +263,28 @@ function MergeView:update_merge_ui()
   self.panel:redraw()
 end
 
+function MergeView:_equalize_diff_windows()
+  if not self.cur_layout then
+    return
+  end
+  local diff_wins = {}
+  local total_w = 0
+  for _, sym in ipairs({ "a", "b", "c" }) do
+    local win = self.cur_layout[sym]
+    if win and win.id and api.nvim_win_is_valid(win.id) then
+      table.insert(diff_wins, win.id)
+      total_w = total_w + api.nvim_win_get_width(win.id)
+    end
+  end
+  if #diff_wins == 0 or total_w <= 0 then
+    return
+  end
+  local each = math.floor(total_w / #diff_wins)
+  for i = 1, #diff_wins - 1 do
+    pcall(api.nvim_win_set_width, diff_wins[i], each)
+  end
+end
+
 function MergeView:toggle_file_panel_width()
   local winid = self.panel.winid
   if not (winid and api.nvim_win_is_valid(winid)) then
@@ -263,10 +294,12 @@ function MergeView:toggle_file_panel_width()
   if self.panel_collapsed then
     self.panel_collapsed = false
     api.nvim_win_set_width(winid, self.panel_expanded_width or 35)
+    self:_equalize_diff_windows()
   else
     self.panel_expanded_width = api.nvim_win_get_width(winid)
     self.panel_collapsed = true
     api.nvim_win_set_width(winid, 5)
+    self:_equalize_diff_windows()
     local result_win = self.cur_layout and self.cur_layout.b and self.cur_layout.b.id
     if result_win and api.nvim_win_is_valid(result_win) then
       api.nvim_set_current_win(result_win)

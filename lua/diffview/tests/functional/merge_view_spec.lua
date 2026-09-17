@@ -89,13 +89,28 @@ describe("diffview.scene.views.diff.merge_view", function()
       assert.is_true(apply_at < counts_at)
       eq(1, view.cur_entry.merge_conflicts_remaining)
 
+      assert.truthy(result_file.winbar:find("[ OURS ]", 1, true))
+      assert.truthy(result_file.winbar:find("[ THEIRS ]", 1, true))
+
       assert.is_true(view.panel:is_open())
       local expanded_width = vim.api.nvim_win_get_width(view.panel.winid)
+      local wb_before = vim.api.nvim_win_get_width(view.cur_layout.b.id)
+      local wc_before = vim.api.nvim_win_get_width(view.cur_layout.c.id)
+
       _G.DiffviewMergePanelClick()
       assert.is_true(view.panel:is_open())
       eq(5, vim.api.nvim_win_get_width(view.panel.winid))
       assert.truthy(vim.wo[view.panel.winid].winbar:find("[ ▶ ]", 1, true))
       assert.is_nil(result_file.winbar:find("DiffviewMergePanelClick", 1, true))
+
+      local wa_after = vim.api.nvim_win_get_width(view.cur_layout.a.id)
+      local wb_after = vim.api.nvim_win_get_width(view.cur_layout.b.id)
+      local wc_after = vim.api.nvim_win_get_width(view.cur_layout.c.id)
+      assert.is_true(wb_after > wb_before)
+      assert.is_true(wc_after > wc_before)
+      assert.is_true(math.abs(wa_after - wb_after) <= 2)
+      assert.is_true(math.abs(wb_after - wc_after) <= 2)
+
       _G.DiffviewMergePanelClick()
       assert.is_true(view.panel:is_open())
       eq(expanded_width, vim.api.nvim_win_get_width(view.panel.winid))
