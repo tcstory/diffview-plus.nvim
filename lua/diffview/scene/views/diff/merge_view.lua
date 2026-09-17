@@ -218,12 +218,16 @@ function MergeView:_handle_left_mouse()
             local theirs_end = theirs_start + theirs_w
 
             if offset >= ours_start and offset <= ours_end + 1 then
-              self.merge_session:choose(entry.path, conflict_on_line, "ours")
-              self.cur_layout:sync_scroll()
+              vim.schedule(function()
+                self.merge_session:choose(entry.path, conflict_on_line, "ours")
+                self.cur_layout:sync_scroll()
+              end)
               return true
             elseif offset > ours_end + 1 and offset <= theirs_end + 2 then
-              self.merge_session:choose(entry.path, conflict_on_line, "theirs")
-              self.cur_layout:sync_scroll()
+              vim.schedule(function()
+                self.merge_session:choose(entry.path, conflict_on_line, "theirs")
+                self.cur_layout:sync_scroll()
+              end)
               return true
             else
               return true

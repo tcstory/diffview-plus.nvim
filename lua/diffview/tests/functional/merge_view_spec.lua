@@ -193,6 +193,9 @@ describe("diffview.scene.views.diff.merge_view", function()
       vim.fn.getmousepos = orig_getmousepos
 
       eq(true, handled_ours)
+      vim.wait(1000, function()
+        return conflict.resolved and conflict.choice == "ours"
+      end)
       eq(true, conflict.resolved)
       eq("ours", conflict.choice)
       eq(0, session_entry.file_entry.merge_conflicts_remaining)
@@ -214,6 +217,9 @@ describe("diffview.scene.views.diff.merge_view", function()
       vim.fn.getmousepos = orig_getmousepos
 
       eq(true, handled_theirs)
+      vim.wait(1000, function()
+        return conflict.resolved and conflict.choice == "theirs"
+      end)
       eq(true, conflict.resolved)
       eq("theirs", conflict.choice)
       eq(0, session_entry.file_entry.merge_conflicts_remaining)
