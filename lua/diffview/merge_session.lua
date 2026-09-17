@@ -276,7 +276,11 @@ function MergeSession:_place_mark(entry, conflict)
   local virt_text
   if conflict.resolved then
     virt_text = {
-      { (" ✔ Resolved: %s "):format(conflict.choice or "manual"), "DiffviewFilePanelInsertions" },
+      { (" ✔ %s "):format(conflict.choice or "manual"), "DiffviewFilePanelInsertions" },
+      { " ", "Normal" },
+      { conflict.choice == "ours" and "[ ✔ OURS ]" or "[ OURS ]", "DiffviewFilePanelInsertions" },
+      { " ", "Normal" },
+      { conflict.choice == "theirs" and "[ ✔ THEIRS ]" or "[ THEIRS ]", "DiffviewFilePanelDeletions" },
     }
   else
     virt_text = {
@@ -349,23 +353,28 @@ function MergeSession:conflict_at(entry, row, unresolved_only)
 end
 
 ---@param path string
----@param row integer
+---@param row_or_conflict integer|MergeSession.Conflict
 ---@param choice "ours"|"base"|"theirs"|"all"|"manual"|"none"
 ---@return boolean changed
-function MergeSession:choose(path, row, choice)
+function MergeSession:choose(path, row_or_conflict, choice)
   local entry = assert(self.entries[path])
   local conflict
-  -- A resolved region remains selectable so the user can revise an earlier
-  -- choice. Outside any tracked region, fall forward to the next unresolved
-  -- one (wrapping at the end), which matches the navigation actions.
-  for _, candidate in ipairs(entry.conflicts) do
-    local start_row, end_row = self:_range(entry, candidate)
-    if row - 1 >= start_row and row - 1 <= math.max(start_row, end_row - 1) then
-      conflict = candidate
-      break
+  if type(row_or_conflict) == "table" then
+    conflict = row_or_conflict
+  else
+    local row = row_or_conflict
+    -- A resolved region remains selectable so the user can revise an earlier
+    -- choice. Outside any tracked region, fall forward to the next unresolved
+    -- one (wrapping at the end), which matches the navigation actions.
+    for _, candidate in ipairs(entry.conflicts) do
+      local start_row, end_row = self:_range(entry, candidate)
+      if row - 1 >= start_row and row - 1 <= math.max(start_row, end_row - 1) then
+        conflict = candidate
+        break
+      end
     end
+    conflict = conflict or self:conflict_at(entry, row, true)
   end
-  conflict = conflict or self:conflict_at(entry, row, true)
   if not conflict then
     return false
   end

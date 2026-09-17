@@ -110,4 +110,72 @@ describe("diffview.scene.views.diff.merge_view", function()
       eq({ "ours" }, vim.fn.readfile(repo .. "/file.txt"))
     end)
   )
+
+  it(
+    "resolves conflicts when clicking inline [ OURS ] and [ THEIRS ] buttons",
+    helpers.async_test(function()
+      repo = make_conflict_repo()
+      local err, adapter = vcs.get_adapter({ top_indicators = { repo } })
+      assert.is_nil(err)
+      view = MergeView({ adapter = adapter, paths = { "file.txt" } })
+      view:open()
+      vim.wait(2000, function()
+        local session_entry = view.merge_session:get("file.txt")
+        return view.ready
+          and view.cur_entry
+          and view.cur_entry.layout.b.file:is_valid()
+          and session_entry
+          and session_entry.bufnr ~= nil
+      end, 10)
+
+      local entry = view.cur_entry
+      local session_entry = view.merge_session:get("file.txt")
+      local conflict = session_entry.conflicts[1]
+      local start_row = view.merge_session:_range(session_entry, conflict)
+      local target_line = start_row + 1
+      local result_win = view.cur_layout.b.id
+      local wininfo = vim.fn.getwininfo(result_win)[1]
+      local line_content = vim.api.nvim_buf_get_lines(session_entry.bufnr, start_row, start_row + 1, false)[1] or ""
+      local text_end_col = (wininfo and wininfo.textoff or 0) + vim.fn.strdisplaywidth(line_content)
+      local status_w = vim.fn.strdisplaywidth((" Unresolved %d "):format(conflict.id))
+
+      -- Simulate click on [ OURS ] button from Window A
+      vim.api.nvim_set_current_win(view.cur_layout.a.id)
+      local orig_getmousepos = vim.fn.getmousepos
+      vim.fn.getmousepos = function()
+        return {
+          winid = result_win,
+          line = target_line,
+          wincol = text_end_col + status_w + 3, -- inside [ OURS ]
+          column = #line_content + 1,
+        }
+      end
+
+      view:_handle_left_mouse()
+      vim.fn.getmousepos = orig_getmousepos
+
+      eq(true, conflict.resolved)
+      eq("ours", conflict.choice)
+      eq(0, session_entry.file_entry.merge_conflicts_remaining)
+
+      -- Now switch to THEIRS by clicking [ THEIRS ]
+      local resolved_status_w = vim.fn.strdisplaywidth(" ✔ ours ")
+      local ours_w = vim.fn.strdisplaywidth("[ ✔ OURS ]")
+      vim.fn.getmousepos = function()
+        return {
+          winid = result_win,
+          line = target_line,
+          wincol = text_end_col + resolved_status_w + ours_w + 5, -- inside [ THEIRS ]
+          column = #line_content + 1,
+        }
+      end
+
+      view:_handle_left_mouse()
+      vim.fn.getmousepos = orig_getmousepos
+
+      eq(true, conflict.resolved)
+      eq("theirs", conflict.choice)
+      eq(0, session_entry.file_entry.merge_conflicts_remaining)
+    end)
+  )
 end)

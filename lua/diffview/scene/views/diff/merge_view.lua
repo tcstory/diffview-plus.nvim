@@ -61,6 +61,9 @@ function MergeView:init(opt)
   self.emitter:on("file_open_post", function(_, entry)
     self:attach_result_entry(entry)
   end)
+  self.emitter:on("post_layout", function()
+    self:_install_click_handlers()
+  end)
 
   self.panel.rev_pretty_name = "Transactional Merge"
 
@@ -133,50 +136,92 @@ function MergeView:attach_result_entry(entry)
   local main = entry.layout:get_main_win()
   if main and main.file and main.file.bufnr then
     self.merge_session:attach(entry.path, main.file.bufnr, entry)
-    self:_install_result_click(main.file.bufnr, main.id, entry.path)
+    self:_install_click_handlers()
   end
 end
 
-function MergeView:_install_result_click(bufnr, winid, path)
-  vim.keymap.set("n", "<LeftMouse>", function()
-    local mouse = vim.fn.getmousepos()
-    if mouse.winid == winid and mouse.line > 0 then
-      local current = self.merge_session:get(path)
-      if current then
-        local conflict = self.merge_session:conflict_at(current, mouse.line, false)
-        if conflict and not conflict.resolved then
-          local wininfo = vim.fn.getwininfo(winid)[1]
-          local line_content = api.nvim_buf_get_lines(bufnr, mouse.line - 1, mouse.line, false)[1] or ""
-          local text_end_col = (wininfo and wininfo.textoff or 0)
-            + math.max(0, #line_content - (wininfo and wininfo.leftcol or 0))
+function MergeView:_install_click_handlers()
+  local bufs = {}
+  if self.panel and self.panel.bufnr and api.nvim_buf_is_valid(self.panel.bufnr) then
+    table.insert(bufs, self.panel.bufnr)
+  end
+  if self.cur_layout then
+    for _, sym in ipairs({ "a", "b", "c" }) do
+      local win = self.cur_layout[sym]
+      if win and win.file and win.file.bufnr and api.nvim_buf_is_valid(win.file.bufnr) then
+        table.insert(bufs, win.file.bufnr)
+      end
+    end
+  end
 
-          if mouse.wincol > text_end_col then
-            local offset = mouse.wincol - text_end_col
-            local label_len = #(" Unresolved " .. conflict.id .. " ")
-            local ours_btn = " [ OURS ]"
-            local sep = " "
-            local theirs_btn = "[ THEIRS ]"
+  for _, bufnr in ipairs(bufs) do
+    vim.keymap.set("n", "<LeftMouse>", function()
+      self:_handle_left_mouse()
+    end, { buffer = bufnr, silent = true, nowait = true })
+  end
+end
 
-            if offset > label_len and offset <= label_len + #ours_btn then
-              self.merge_session:choose(path, mouse.line, "ours")
-              self.cur_layout:sync_scroll()
-              return
-            elseif offset > label_len + #ours_btn + #sep and offset <= label_len + #ours_btn + #sep + #theirs_btn then
-              self.merge_session:choose(path, mouse.line, "theirs")
-              self.cur_layout:sync_scroll()
-              return
-            end
+function MergeView:_handle_left_mouse()
+  local mouse = vim.fn.getmousepos()
+  local cur_main = self.cur_layout and self.cur_layout:get_main_win()
+  local result_win = cur_main and cur_main.id
+  local entry = self.cur_entry
+
+  if result_win and mouse.winid == result_win and mouse.line > 0 and entry then
+    local current = self.merge_session:get(entry.path)
+    if current then
+      local conflict_on_line
+      for _, c in ipairs(current.conflicts) do
+        local s_row = self.merge_session:_range(current, c)
+        if s_row + 1 == mouse.line then
+          conflict_on_line = c
+          break
+        end
+      end
+
+      if conflict_on_line then
+        local bufnr = cur_main.file and cur_main.file.bufnr
+        local line_content = bufnr and api.nvim_buf_get_lines(bufnr, mouse.line - 1, mouse.line, false)[1] or ""
+        local wininfo = vim.fn.getwininfo(result_win)[1]
+        local text_width = vim.fn.strdisplaywidth(line_content)
+        local text_end_col = (wininfo and wininfo.textoff or 0)
+          + math.max(0, text_width - (wininfo and wininfo.leftcol or 0))
+
+        if mouse.wincol > text_end_col then
+          local offset = mouse.wincol - text_end_col
+          local status_str = conflict_on_line.resolved
+            and (" ✔ %s "):format(conflict_on_line.choice or "manual")
+            or (" Unresolved %d "):format(conflict_on_line.id)
+          local prefix_w = vim.fn.strdisplaywidth(status_str)
+          local ours_str = conflict_on_line.resolved and conflict_on_line.choice == "ours" and "[ ✔ OURS ]" or "[ OURS ]"
+          local ours_w = vim.fn.strdisplaywidth(ours_str)
+          local theirs_str = conflict_on_line.resolved and conflict_on_line.choice == "theirs" and "[ ✔ THEIRS ]" or "[ THEIRS ]"
+          local theirs_w = vim.fn.strdisplaywidth(theirs_str)
+
+          local ours_start = prefix_w + 1
+          local ours_end = ours_start + ours_w
+          local theirs_start = ours_end + 1
+          local theirs_end = theirs_start + theirs_w
+
+          if offset >= ours_start and offset <= ours_end + 1 then
+            self.merge_session:choose(entry.path, conflict_on_line, "ours")
+            self.cur_layout:sync_scroll()
+            return
+          elseif offset > ours_end + 1 and offset <= theirs_end + 2 then
+            self.merge_session:choose(entry.path, conflict_on_line, "theirs")
+            self.cur_layout:sync_scroll()
+            return
           end
         end
       end
     end
+  end
 
-    local m = vim.fn.getmousepos()
-    if m.winid > 0 and api.nvim_win_is_valid(m.winid) then
-      api.nvim_set_current_win(m.winid)
-      pcall(api.nvim_win_set_cursor, m.winid, { m.line, math.max(0, m.column - 1) })
-    end
-  end, { buffer = bufnr, silent = true, nowait = true })
+  local m = vim.fn.getmousepos()
+  if m.winid > 0 and api.nvim_win_is_valid(m.winid) then
+    api.nvim_set_current_win(m.winid)
+    pcall(api.nvim_win_set_cursor, m.winid, { m.line, math.max(0, m.column - 1) })
+  end
 end
 
 function MergeView:update_merge_ui()
