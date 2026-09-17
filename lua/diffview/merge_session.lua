@@ -281,6 +281,7 @@ function MergeSession:_place_mark(entry, conflict)
       { conflict.choice == "ours" and "[ ✔ OURS ]" or "[ OURS ]", "DiffviewFilePanelInsertions" },
       { " ", "Normal" },
       { conflict.choice == "theirs" and "[ ✔ THEIRS ]" or "[ THEIRS ]", "DiffviewFilePanelDeletions" },
+      { " ", "Normal" },
     }
   else
     virt_text = {
@@ -289,13 +290,14 @@ function MergeSession:_place_mark(entry, conflict)
       { "[ OURS ]", "DiffviewFilePanelInsertions" },
       { " ", "Normal" },
       { "[ THEIRS ]", "DiffviewFilePanelDeletions" },
+      { " ", "Normal" },
     }
   end
   conflict.extmark = api.nvim_buf_set_extmark(entry.bufnr, self.namespace, start_row, 0, {
     end_row = end_row,
     end_col = 0,
     virt_text = virt_text,
-    virt_text_pos = "eol",
+    virt_text_pos = "inline",
     right_gravity = false,
     end_right_gravity = true,
   })

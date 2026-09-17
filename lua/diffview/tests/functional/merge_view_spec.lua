@@ -89,8 +89,8 @@ describe("diffview.scene.views.diff.merge_view", function()
       assert.is_true(apply_at < counts_at)
       eq(1, view.cur_entry.merge_conflicts_remaining)
 
-      assert.truthy(result_file.winbar:find("[ OURS ]", 1, true))
-      assert.truthy(result_file.winbar:find("[ THEIRS ]", 1, true))
+      assert.is_nil(result_file.winbar:find("[ OURS ]", 1, true))
+      assert.is_nil(result_file.winbar:find("[ THEIRS ]", 1, true))
 
       assert.is_true(view.panel:is_open())
       local expanded_width = vim.api.nvim_win_get_width(view.panel.winid)
@@ -150,8 +150,7 @@ describe("diffview.scene.views.diff.merge_view", function()
       local target_line = start_row + 1
       local result_win = view.cur_layout.b.id
       local wininfo = vim.fn.getwininfo(result_win)[1]
-      local line_content = vim.api.nvim_buf_get_lines(session_entry.bufnr, start_row, start_row + 1, false)[1] or ""
-      local text_end_col = (wininfo and wininfo.textoff or 0) + vim.fn.strdisplaywidth(line_content)
+      local textoff = wininfo and wininfo.textoff or 0
       local status_w = vim.fn.strdisplaywidth((" Unresolved %d "):format(conflict.id))
 
       -- Simulate click on [ OURS ] button from Window A
@@ -161,8 +160,8 @@ describe("diffview.scene.views.diff.merge_view", function()
         return {
           winid = result_win,
           line = target_line,
-          wincol = text_end_col + status_w + 3, -- inside [ OURS ]
-          column = #line_content + 1,
+          wincol = textoff + status_w + 3, -- inside [ OURS ] at front of line
+          column = 1,
         }
       end
 
@@ -180,8 +179,8 @@ describe("diffview.scene.views.diff.merge_view", function()
         return {
           winid = result_win,
           line = target_line,
-          wincol = text_end_col + resolved_status_w + ours_w + 5, -- inside [ THEIRS ]
-          column = #line_content + 1,
+          wincol = textoff + resolved_status_w + ours_w + 5, -- inside [ THEIRS ] at front of line
+          column = 1,
         }
       end
 

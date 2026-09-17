@@ -187,15 +187,10 @@ function MergeView:_handle_left_mouse()
       end
 
       if conflict_on_line then
-        local bufnr = cur_main.file and cur_main.file.bufnr
-        local line_content = bufnr and api.nvim_buf_get_lines(bufnr, mouse.line - 1, mouse.line, false)[1] or ""
         local wininfo = vim.fn.getwininfo(result_win)[1]
-        local text_width = vim.fn.strdisplaywidth(line_content)
-        local text_end_col = (wininfo and wininfo.textoff or 0)
-          + math.max(0, text_width - (wininfo and wininfo.leftcol or 0))
+        local offset = mouse.wincol - (wininfo and wininfo.textoff or 0)
 
-        if mouse.wincol > text_end_col then
-          local offset = mouse.wincol - text_end_col
+        if offset > 0 then
           local status_str = conflict_on_line.resolved
             and (" ✔ %s "):format(conflict_on_line.choice or "manual")
             or (" Unresolved %d "):format(conflict_on_line.id)
@@ -243,15 +238,9 @@ function MergeView:update_merge_ui()
     local apply_label = unresolved == 0
       and "%%#DiffviewFilePanelInsertions#%%@v:lua.DiffviewMergeApplyClick@[ ✔ APPLY CHANGES ]%%X%%*"
       or "%%@v:lua.DiffviewMergeApplyClick@[ APPLY ]%%X"
-    local ours_label = "%%#DiffviewFilePanelInsertions#%%@v:lua.DiffviewMergeOursClick@[ OURS ]%%X%%*"
-    local theirs_label = "%%#DiffviewFilePanelDeletions#%%@v:lua.DiffviewMergeTheirsClick@[ THEIRS ]%%X%%*"
     entry.layout.b.file.winbar = (
       "RESULT  "
       .. apply_label
-      .. "  "
-      .. ours_label
-      .. " "
-      .. theirs_label
       .. "  FILE %d/%d unresolved | ALL %d/%d"
     ):format(file_remaining, file_total, unresolved, total)
     local winid = self.cur_layout and self.cur_layout.b and self.cur_layout.b.id
