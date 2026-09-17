@@ -165,6 +165,38 @@ describe("diffview.merge_session", function()
     }, vim.fn.readfile(repo .. "/file.txt"))
   end)
 
+  it("jumps past the current conflict when the cursor is inside a multi-line region", function()
+    repo = make_conflict_repo()
+    local err, adapter = vcs.get_adapter({ top_indicators = { repo } })
+    assert.is_nil(err)
+
+    local session = MergeSession(adapter, { "file.txt" })
+    local entry = assert(session:get("file.txt"))
+    local bufnr = vim.api.nvim_create_buf(false, true)
+    vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, entry.result)
+    session:attach("file.txt", bufnr, { stats = {} })
+
+    local second = entry.conflicts[2]
+    local start_row, end_row = session:_range(entry, second)
+    vim.api.nvim_buf_set_lines(bufnr, start_row, end_row, false, {
+      "second base line 1",
+      "second base line 2",
+      "second base line 3",
+    })
+    start_row, end_row = session:_range(entry, second)
+    local cursor_row = start_row + 2
+    assert.is_true(cursor_row - 1 >= start_row and cursor_row - 1 < end_row)
+
+    local target_row, target_index = session:jump("file.txt", cursor_row, -1)
+    local first_start_row = session:_range(entry, entry.conflicts[1])
+    eq(1, target_index)
+    eq(first_start_row + 1, target_row)
+
+    target_row, target_index = session:jump("file.txt", cursor_row, 1)
+    eq(1, target_index)
+    eq(first_start_row + 1, target_row)
+  end)
+
   it("refuses to overwrite a working-tree file changed outside the session", function()
     repo = make_conflict_repo()
     local err, adapter = vcs.get_adapter({ top_indicators = { repo } })

@@ -435,12 +435,16 @@ function MergeSession:jump(path, row, delta)
   end
 
   local target = delta > 0 and 1 or #pending
+  local cursor_row = row - 1
   for index, conflict in ipairs(pending) do
-    local start_row = self:_range(entry, conflict)
-    if delta > 0 and start_row + 1 > row then
+    local start_row, end_row = self:_range(entry, conflict)
+    if cursor_row >= start_row and cursor_row <= math.max(start_row, end_row - 1) then
+      target = (index + (delta > 0 and 1 or -1) - 1) % #pending + 1
+      break
+    elseif delta > 0 and start_row > cursor_row then
       target = index
       break
-    elseif delta < 0 and start_row + 1 < row then
+    elseif delta < 0 and start_row < cursor_row then
       target = index
     end
   end
