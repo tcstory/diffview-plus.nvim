@@ -133,7 +133,50 @@ function MergeView:attach_result_entry(entry)
   local main = entry.layout:get_main_win()
   if main and main.file and main.file.bufnr then
     self.merge_session:attach(entry.path, main.file.bufnr, entry)
+    self:_install_result_click(main.file.bufnr, main.id, entry.path)
   end
+end
+
+function MergeView:_install_result_click(bufnr, winid, path)
+  vim.keymap.set("n", "<LeftMouse>", function()
+    local mouse = vim.fn.getmousepos()
+    if mouse.winid == winid and mouse.line > 0 then
+      local current = self.merge_session:get(path)
+      if current then
+        local conflict = self.merge_session:conflict_at(current, mouse.line, false)
+        if conflict and not conflict.resolved then
+          local wininfo = vim.fn.getwininfo(winid)[1]
+          local line_content = api.nvim_buf_get_lines(bufnr, mouse.line - 1, mouse.line, false)[1] or ""
+          local text_end_col = (wininfo and wininfo.textoff or 0)
+            + math.max(0, #line_content - (wininfo and wininfo.leftcol or 0))
+
+          if mouse.wincol > text_end_col then
+            local offset = mouse.wincol - text_end_col
+            local label_len = #(" Unresolved " .. conflict.id .. " ")
+            local ours_btn = " [ OURS ]"
+            local sep = " "
+            local theirs_btn = "[ THEIRS ]"
+
+            if offset > label_len and offset <= label_len + #ours_btn then
+              self.merge_session:choose(path, mouse.line, "ours")
+              self.cur_layout:sync_scroll()
+              return
+            elseif offset > label_len + #ours_btn + #sep and offset <= label_len + #ours_btn + #sep + #theirs_btn then
+              self.merge_session:choose(path, mouse.line, "theirs")
+              self.cur_layout:sync_scroll()
+              return
+            end
+          end
+        end
+      end
+    end
+
+    local m = vim.fn.getmousepos()
+    if m.winid > 0 and api.nvim_win_is_valid(m.winid) then
+      api.nvim_set_current_win(m.winid)
+      pcall(api.nvim_win_set_cursor, m.winid, { m.line, math.max(0, m.column - 1) })
+    end
+  end, { buffer = bufnr, silent = true, nowait = true })
 end
 
 function MergeView:update_merge_ui()
@@ -149,12 +192,13 @@ function MergeView:update_merge_ui()
     local current = assert(self.merge_session:get(entry.path))
     local file_remaining = self.merge_session:entry_remaining(current)
     local file_total = #current.conflicts
+    local apply_label = unresolved == 0
+      and "%%#DiffviewFilePanelInsertions#%%@v:lua.DiffviewMergeApplyClick@[ ✔ APPLY CHANGES ]%%X%%*"
+      or "%%@v:lua.DiffviewMergeApplyClick@[ APPLY ]%%X"
     entry.layout.b.file.winbar = (
-      "RESULT "
-      .. "%%@v:lua.DiffviewMergeOursClick@[ OURS ]%%X "
-      .. "%%@v:lua.DiffviewMergeTheirsClick@[ THEIRS ]%%X "
-      .. "%%@v:lua.DiffviewMergeApplyClick@[ APPLY ]%%X  "
-      .. "FILE %d/%d | ALL %d/%d"
+      "RESULT  "
+      .. apply_label
+      .. "  FILE %d/%d unresolved | ALL %d/%d"
     ):format(file_remaining, file_total, unresolved, total)
     local winid = self.cur_layout and self.cur_layout.b and self.cur_layout.b.id
     if winid and api.nvim_win_is_valid(winid) then

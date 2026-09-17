@@ -273,13 +273,24 @@ function MergeSession:_place_mark(entry, conflict)
   if conflict.extmark then
     pcall(api.nvim_buf_del_extmark, entry.bufnr, self.namespace, conflict.extmark)
   end
-  local label = conflict.resolved
-      and (" Resolved: %s "):format(conflict.choice or "manual")
-    or (" Unresolved %d "):format(conflict.id)
+  local virt_text
+  if conflict.resolved then
+    virt_text = {
+      { (" ✔ Resolved: %s "):format(conflict.choice or "manual"), "DiffviewFilePanelInsertions" },
+    }
+  else
+    virt_text = {
+      { (" Unresolved %d "):format(conflict.id), "DiagnosticError" },
+      { " ", "Normal" },
+      { "[ OURS ]", "DiffviewFilePanelInsertions" },
+      { " ", "Normal" },
+      { "[ THEIRS ]", "DiffviewFilePanelDeletions" },
+    }
+  end
   conflict.extmark = api.nvim_buf_set_extmark(entry.bufnr, self.namespace, start_row, 0, {
     end_row = end_row,
     end_col = 0,
-    virt_text = { { label, conflict.resolved and "DiffviewFilePanelInsertions" or "DiagnosticError" } },
+    virt_text = virt_text,
     virt_text_pos = "eol",
     right_gravity = false,
     end_right_gravity = true,
