@@ -152,8 +152,9 @@ function M._is_applicable(fn, view)
     return true
   end
   if t == "merge_only" then
-    -- `merge_ctx` is a `DiffView` field; on other views the access is nil-safe.
-    return view ~= nil and (view --[[@as DiffView]]).merge_ctx ~= nil
+    -- `merge_ctx` is a `DiffView` field, `merge_session` is a `MergeView` field;
+    -- on other views the access is nil-safe.
+    return view ~= nil and ((view --[[@as DiffView]]).merge_ctx ~= nil or (view --[[@as any]]).merge_session ~= nil)
   end
   if t == "working_tree_only" then
     -- Strict index-vs-worktree actions (`stage_all`, `unstage_all`) are only

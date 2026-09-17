@@ -166,6 +166,12 @@ function MergeView:_install_click_handlers()
         end
       end
     end, { buffer = bufnr, silent = true, nowait = true })
+    vim.keymap.set("n", "]x", function()
+      self:jump_conflict(1)
+    end, { buffer = bufnr, silent = true, nowait = true, desc = "Jump to next conflict" })
+    vim.keymap.set("n", "[x", function()
+      self:jump_conflict(-1)
+    end, { buffer = bufnr, silent = true, nowait = true, desc = "Jump to previous conflict" })
   end
 end
 
