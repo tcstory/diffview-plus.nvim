@@ -87,13 +87,13 @@ end
 ---@param adapter GitAdapter
 ---@param path string
 ---@param stage integer
----@return string[]
+---@return string[]?
 local function read_stage(adapter, path, stage)
   local out, code = adapter:exec_sync({ "show", (":%d:%s"):format(stage, path) }, {
     cwd = adapter.ctx.toplevel,
     silent = true,
   })
-  return code == 0 and out or {}
+  return code == 0 and out or nil
 end
 
 ---@param adapter GitAdapter
@@ -113,24 +113,22 @@ local function diff3_merge(adapter, path)
     theirs = pl:join(temp_dir, "theirs"),
   }
 
-  vim.fn.writefile(read_stage(adapter, path, 2), paths.ours, "b")
-  vim.fn.writefile(read_stage(adapter, path, 1), paths.base, "b")
-  vim.fn.writefile(read_stage(adapter, path, 3), paths.theirs, "b")
+  local base_stage = read_stage(adapter, path, 1)
+  local has_base = base_stage ~= nil and #base_stage > 0
 
-  local out, code, stderr = adapter:exec_sync({
-    "merge-file",
-    "-p",
-    "--diff3",
-    "-L",
-    "OURS",
-    "-L",
-    "BASE",
-    "-L",
-    "THEIRS",
-    paths.ours,
-    paths.base,
-    paths.theirs,
-  }, {
+  vim.fn.writefile(read_stage(adapter, path, 2) or {}, paths.ours, "b")
+  vim.fn.writefile(base_stage or {}, paths.base, "b")
+  vim.fn.writefile(read_stage(adapter, path, 3) or {}, paths.theirs, "b")
+
+  local cmd = { "merge-file", "-p" }
+  if has_base then
+    vim.list_extend(cmd, { "--diff3", "-L", "OURS", "-L", "BASE", "-L", "THEIRS" })
+  else
+    vim.list_extend(cmd, { "-L", "OURS", "-L", "", "-L", "THEIRS" })
+  end
+  vim.list_extend(cmd, { paths.ours, paths.base, paths.theirs })
+
+  local out, code, stderr = adapter:exec_sync(cmd, {
     cwd = adapter.ctx.toplevel,
     silent = true,
   })

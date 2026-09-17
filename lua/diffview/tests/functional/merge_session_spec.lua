@@ -228,4 +228,49 @@ describe("diffview.merge_session", function()
     assert.truthy(result:find("\r\n", 1, true))
     assert.is_nil(result:find("[^\r]\n"))
   end)
+
+  it("handles both-added files with no stage 1 base", function()
+    repo = helpers.init_repo()
+    helpers.write(repo, "init.txt", { "init" })
+    helpers.commit(repo, "root")
+    local target_branch = helpers.run({ "git", "branch", "--show-current" }, repo)
+    helpers.run({ "git", "branch", "feature" }, repo)
+
+    helpers.write(repo, "added.txt", {
+      "common header",
+      "ours unique line",
+      "common footer",
+    })
+    helpers.commit(repo, "add ours")
+
+    helpers.run({ "git", "switch", "-q", "feature" }, repo)
+    helpers.write(repo, "added.txt", {
+      "common header",
+      "theirs unique line",
+      "common footer",
+    })
+    helpers.commit(repo, "add theirs")
+    helpers.run({ "git", "switch", "-q", target_branch }, repo)
+    helpers.system({ "git", "merge", "feature" }, repo, { allow_nonzero = true })
+
+    local err, adapter = vcs.get_adapter({ top_indicators = { repo } })
+    assert.is_nil(err)
+    local session = MergeSession(adapter, { "added.txt" })
+    local entry = assert(session:get("added.txt"))
+    eq(1, #entry.conflicts)
+    eq({ "common header", "common footer" }, entry.result)
+
+    local bufnr = vim.api.nvim_create_buf(false, true)
+    vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, entry.result)
+    session:attach("added.txt", bufnr, { stats = {} })
+    session:choose_all("added.txt", "ours")
+
+    local ok, apply_err = session:apply()
+    assert.is_true(ok, apply_err)
+    eq({
+      "common header",
+      "ours unique line",
+      "common footer",
+    }, vim.fn.readfile(repo .. "/added.txt"))
+  end)
 end)
