@@ -177,17 +177,14 @@ function MergeView:_install_click_handlers()
   end
 
   for _, bufnr in ipairs(bufs) do
-    vim.keymap.set("n", "<LeftMouse>", function()
-      if not self:_handle_left_mouse() then
-        local mouse = vim.fn.getmousepos()
-        if mouse.winid > 0 and api.nvim_win_is_valid(mouse.winid) then
-          api.nvim_set_current_win(mouse.winid)
-          if mouse.line > 0 and mouse.column > 0 then
-            pcall(api.nvim_win_set_cursor, mouse.winid, { mouse.line, mouse.column - 1 })
-          end
+    for _, lhs in ipairs({ "<LeftMouse>", "<2-LeftMouse>", "<3-LeftMouse>", "<4-LeftMouse>" }) do
+      vim.keymap.set("n", lhs, function()
+        if self:_handle_left_mouse() then
+          return ""
         end
-      end
-    end, { buffer = bufnr, silent = true, nowait = true })
+        return lhs
+      end, { buffer = bufnr, silent = true, nowait = true, expr = true })
+    end
     vim.keymap.set("n", "]x", function()
       self:jump_conflict(1)
     end, { buffer = bufnr, silent = true, nowait = true, desc = "Jump to next conflict" })
@@ -250,13 +247,26 @@ function MergeView:_handle_left_mouse()
             local theirs_start = ours_end + 1
             local theirs_end = theirs_start + theirs_w
 
-            if offset >= ours_start and offset <= ours_end + 1 then
-              self.merge_session:choose(entry.path, conflict_on_line, "ours")
+            local function do_choose(choice)
+              self.merge_session:choose(entry.path, conflict_on_line, choice)
               self.cur_layout:sync_scroll()
+            end
+
+            if offset >= ours_start and offset <= ours_end + 1 then
+              local ok = pcall(do_choose, "ours")
+              if not ok then
+                vim.schedule(function()
+                  do_choose("ours")
+                end)
+              end
               return true
             elseif offset > ours_end + 1 and offset <= theirs_end + 2 then
-              self.merge_session:choose(entry.path, conflict_on_line, "theirs")
-              self.cur_layout:sync_scroll()
+              local ok = pcall(do_choose, "theirs")
+              if not ok then
+                vim.schedule(function()
+                  do_choose("theirs")
+                end)
+              end
               return true
             else
               return true
@@ -292,8 +302,11 @@ function MergeView:update_merge_ui()
       .. nav_buttons
       .. "  "
       .. apply_label
-      .. "  FILE %d/%d unresolved | ALL %d/%d"
+      .. "  %%<FILE %d/%d unresolved | ALL %d/%d"
     ):format(file_remaining, file_total, unresolved, total)
+    if self.cur_layout and self.cur_layout.b and self.cur_layout.b.file then
+      self.cur_layout.b.file.winbar = entry.layout.b.file.winbar
+    end
     local winid = self.cur_layout and self.cur_layout.b and self.cur_layout.b.id
     if winid and api.nvim_win_is_valid(winid) then
       vim.wo[winid].winbar = entry.layout.b.file.winbar
@@ -390,6 +403,7 @@ function MergeView:jump_conflict(delta)
     api.nvim_echo({ {
       ("Unresolved conflict [%d/%d]"):format(index, self.merge_session:entry_remaining(current)),
     } }, false, {})
+    pcall(vim.cmd, "redraw")
     return { current = index, total = self.merge_session:entry_remaining(current) }
   else
     local current = self.merge_session:get(self.cur_entry.path)
@@ -461,17 +475,21 @@ _G.DiffviewMergeTheirsClick = function()
   end
 end
 
-_G.DiffviewMergePrevConflictClick = function()
+_G.DiffviewMergePrevConflictClick = function(...)
   local view = require("diffview.lib").get_current_view()
   if view and view.jump_conflict then
-    return view:jump_conflict(-1)
+    local res = view:jump_conflict(-1)
+    pcall(vim.cmd, "redraw")
+    return res
   end
 end
 
-_G.DiffviewMergeNextConflictClick = function()
+_G.DiffviewMergeNextConflictClick = function(...)
   local view = require("diffview.lib").get_current_view()
   if view and view.jump_conflict then
-    return view:jump_conflict(1)
+    local res = view:jump_conflict(1)
+    pcall(vim.cmd, "redraw")
+    return res
   end
 end
 
