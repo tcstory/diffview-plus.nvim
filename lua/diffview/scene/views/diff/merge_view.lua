@@ -187,32 +187,47 @@ function MergeView:_handle_left_mouse()
       end
 
       if conflict_on_line then
-        local wininfo = vim.fn.getwininfo(result_win)[1]
-        local offset = mouse.wincol - (wininfo and wininfo.textoff or 0)
+        local sp = vim.fn.screenpos(result_win, mouse.line, 1)
+        local is_virt_line = true
+        if sp and sp.row > 0 and mouse.screenrow then
+          local s_row = self.merge_session:_range(current, conflict_on_line)
+          if s_row > 0 then
+            is_virt_line = mouse.screenrow < sp.row
+          else
+            is_virt_line = mouse.screenrow > sp.row
+          end
+        end
 
-        if offset > 0 then
-          local status_str = conflict_on_line.resolved
-            and (" ✔ %s "):format(conflict_on_line.choice or "manual")
-            or (" Unresolved %d "):format(conflict_on_line.id)
-          local prefix_w = vim.fn.strdisplaywidth(status_str)
-          local ours_str = conflict_on_line.resolved and conflict_on_line.choice == "ours" and "[ ✔ OURS ]" or "[ OURS ]"
-          local ours_w = vim.fn.strdisplaywidth(ours_str)
-          local theirs_str = conflict_on_line.resolved and conflict_on_line.choice == "theirs" and "[ ✔ THEIRS ]" or "[ THEIRS ]"
-          local theirs_w = vim.fn.strdisplaywidth(theirs_str)
+        if is_virt_line then
+          local wininfo = vim.fn.getwininfo(result_win)[1]
+          local offset = mouse.wincol - (wininfo and wininfo.textoff or 0)
 
-          local ours_start = prefix_w + 1
-          local ours_end = ours_start + ours_w
-          local theirs_start = ours_end + 1
-          local theirs_end = theirs_start + theirs_w
+          if offset > 0 then
+            local status_str = conflict_on_line.resolved
+              and (" ✔ %s "):format(conflict_on_line.choice or "manual")
+              or (" Unresolved %d "):format(conflict_on_line.id)
+            local prefix_w = vim.fn.strdisplaywidth(status_str)
+            local ours_str = conflict_on_line.resolved and conflict_on_line.choice == "ours" and "[ ✔ OURS ]" or "[ OURS ]"
+            local ours_w = vim.fn.strdisplaywidth(ours_str)
+            local theirs_str = conflict_on_line.resolved and conflict_on_line.choice == "theirs" and "[ ✔ THEIRS ]" or "[ THEIRS ]"
+            local theirs_w = vim.fn.strdisplaywidth(theirs_str)
 
-          if offset >= ours_start and offset <= ours_end + 1 then
-            self.merge_session:choose(entry.path, conflict_on_line, "ours")
-            self.cur_layout:sync_scroll()
-            return true
-          elseif offset > ours_end + 1 and offset <= theirs_end + 2 then
-            self.merge_session:choose(entry.path, conflict_on_line, "theirs")
-            self.cur_layout:sync_scroll()
-            return true
+            local ours_start = prefix_w + 1
+            local ours_end = ours_start + ours_w
+            local theirs_start = ours_end + 1
+            local theirs_end = theirs_start + theirs_w
+
+            if offset >= ours_start and offset <= ours_end + 1 then
+              self.merge_session:choose(entry.path, conflict_on_line, "ours")
+              self.cur_layout:sync_scroll()
+              return true
+            elseif offset > ours_end + 1 and offset <= theirs_end + 2 then
+              self.merge_session:choose(entry.path, conflict_on_line, "theirs")
+              self.cur_layout:sync_scroll()
+              return true
+            else
+              return true
+            end
           end
         end
       end

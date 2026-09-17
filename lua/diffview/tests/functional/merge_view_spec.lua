@@ -153,21 +153,46 @@ describe("diffview.scene.views.diff.merge_view", function()
       local textoff = wininfo and wininfo.textoff or 0
       local status_w = vim.fn.strdisplaywidth((" Unresolved %d "):format(conflict.id))
 
-      -- Simulate click on [ OURS ] button from Window A
-      vim.api.nvim_set_current_win(view.cur_layout.a.id)
+      -- Clicking the actual code line (screenpos.row) should not resolve conflict and should allow normal click
+      local sp = vim.fn.screenpos(result_win, target_line, 1)
       local orig_getmousepos = vim.fn.getmousepos
+      if sp and sp.row > 0 then
+        conflict.resolved = false
+        conflict.choice = nil
+        view.merge_session:_place_mark(session_entry, conflict)
+
+        vim.fn.getmousepos = function()
+          return {
+            winid = result_win,
+            line = target_line,
+            wincol = textoff + status_w + 3,
+            column = 1,
+            screenrow = sp.row, -- on the code line, NOT the virtual line
+          }
+        end
+        local handled = view:_handle_left_mouse()
+        eq(false, conflict.resolved)
+        eq(nil, conflict.choice)
+        eq(false, handled or false)
+      end
+
+      -- Simulate click on [ OURS ] button on the virtual line above the conflict
+      local virt_screenrow = (sp and sp.row > 0) and (start_row > 0 and sp.row - 1 or sp.row + 1) or 0
+      vim.api.nvim_set_current_win(view.cur_layout.a.id)
       vim.fn.getmousepos = function()
         return {
           winid = result_win,
           line = target_line,
           wincol = textoff + status_w + 3, -- inside [ OURS ] at front of line
           column = 1,
+          screenrow = virt_screenrow > 0 and virt_screenrow or nil,
         }
       end
 
-      view:_handle_left_mouse()
+      local handled_ours = view:_handle_left_mouse()
       vim.fn.getmousepos = orig_getmousepos
 
+      eq(true, handled_ours)
       eq(true, conflict.resolved)
       eq("ours", conflict.choice)
       eq(0, session_entry.file_entry.merge_conflicts_remaining)
@@ -181,12 +206,14 @@ describe("diffview.scene.views.diff.merge_view", function()
           line = target_line,
           wincol = textoff + resolved_status_w + ours_w + 5, -- inside [ THEIRS ] at front of line
           column = 1,
+          screenrow = virt_screenrow > 0 and virt_screenrow or nil,
         }
       end
 
-      view:_handle_left_mouse()
+      local handled_theirs = view:_handle_left_mouse()
       vim.fn.getmousepos = orig_getmousepos
 
+      eq(true, handled_theirs)
       eq(true, conflict.resolved)
       eq("theirs", conflict.choice)
       eq(0, session_entry.file_entry.merge_conflicts_remaining)
