@@ -84,10 +84,20 @@ describe("diffview.scene.views.diff.merge_view", function()
       end
       assert.truthy(vim.wo[view.panel.winid].winbar:find("[ ◀ ] Hide files", 1, true))
       assert.is_nil(result_file.winbar:find("DiffviewMergePanelClick", 1, true))
+      assert.truthy(result_file.winbar:find("[ ◀ ]", 1, true))
+      assert.truthy(result_file.winbar:find("[ ▶ ]", 1, true))
+      assert.truthy(result_file.winbar:find("DiffviewMergePrevConflictClick", 1, true))
+      assert.truthy(result_file.winbar:find("DiffviewMergeNextConflictClick", 1, true))
       local apply_at = assert(result_file.winbar:find("[ APPLY ]", 1, true))
       local counts_at = assert(result_file.winbar:find("FILE 1/1 unresolved | ALL 1/1", 1, true))
       assert.is_true(apply_at < counts_at)
       eq(1, view.cur_entry.merge_conflicts_remaining)
+
+      -- Test clicking [ ▶ ] and [ ◀ ] winbar buttons
+      local next_res = _G.DiffviewMergeNextConflictClick()
+      eq(1, next_res and next_res.current)
+      local prev_res = _G.DiffviewMergePrevConflictClick()
+      eq(1, prev_res and prev_res.current)
 
       assert.is_nil(result_file.winbar:find("[ OURS ]", 1, true))
       assert.is_nil(result_file.winbar:find("[ THEIRS ]", 1, true))

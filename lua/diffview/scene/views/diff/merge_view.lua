@@ -261,11 +261,14 @@ function MergeView:update_merge_ui()
     local current = assert(self.merge_session:get(entry.path))
     local file_remaining = self.merge_session:entry_remaining(current)
     local file_total = #current.conflicts
+    local nav_buttons = "%%@v:lua.DiffviewMergePrevConflictClick@[ ◀ ]%%X %%@v:lua.DiffviewMergeNextConflictClick@[ ▶ ]%%X"
     local apply_label = unresolved == 0
       and "%%#DiffviewFilePanelInsertions#%%@v:lua.DiffviewMergeApplyClick@[ ✔ APPLY CHANGES ]%%X%%*"
       or "%%@v:lua.DiffviewMergeApplyClick@[ APPLY ]%%X"
     entry.layout.b.file.winbar = (
       "RESULT  "
+      .. nav_buttons
+      .. "  "
       .. apply_label
       .. "  FILE %d/%d unresolved | ALL %d/%d"
     ):format(file_remaining, file_total, unresolved, total)
@@ -357,6 +360,7 @@ function MergeView:jump_conflict(delta)
   local row = api.nvim_win_get_cursor(main.id)[1]
   local target, index = self.merge_session:jump(self.cur_entry.path, row, delta)
   if target then
+    api.nvim_set_current_win(main.id)
     api.nvim_win_set_cursor(main.id, { target, 0 })
     self.cur_layout:sync_scroll()
     local current = assert(self.merge_session:get(self.cur_entry.path))
@@ -364,6 +368,11 @@ function MergeView:jump_conflict(delta)
       ("Unresolved conflict [%d/%d]"):format(index, self.merge_session:entry_remaining(current)),
     } }, false, {})
     return { current = index, total = self.merge_session:entry_remaining(current) }
+  else
+    local current = self.merge_session:get(self.cur_entry.path)
+    if current and self.merge_session:entry_remaining(current) == 0 then
+      api.nvim_echo({ { "All conflicts resolved in this file", "DiffviewFilePanelInsertions" } }, false, {})
+    end
   end
 end
 
@@ -426,6 +435,20 @@ _G.DiffviewMergeTheirsClick = function()
   local view = require("diffview.lib").get_current_view()
   if view and view.choose_conflict then
     view:choose_conflict("theirs")
+  end
+end
+
+_G.DiffviewMergePrevConflictClick = function()
+  local view = require("diffview.lib").get_current_view()
+  if view and view.jump_conflict then
+    return view:jump_conflict(-1)
+  end
+end
+
+_G.DiffviewMergeNextConflictClick = function()
+  local view = require("diffview.lib").get_current_view()
+  if view and view.jump_conflict then
+    return view:jump_conflict(1)
   end
 end
 
