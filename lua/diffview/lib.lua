@@ -84,15 +84,6 @@ function M.diffview_open(args)
 
   ---@cast adapter -?
 
-  if not rev_arg and adapter:instanceof(GitAdapter.__get()) then
-    local conflicted = adapter:exec_sync({ "diff", "--name-only", "--diff-filter=U" }, {
-      cwd = adapter.ctx.toplevel,
-      silent = true,
-    })
-    if conflicted and #conflicted > 0 then
-      return M.diffview_merge_open(args)
-    end
-  end
 
   local opts = adapter:diffview_options(argo)
 
