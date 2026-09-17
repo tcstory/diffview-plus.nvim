@@ -156,11 +156,16 @@ function MergeView:_install_click_handlers()
 
   for _, bufnr in ipairs(bufs) do
     vim.keymap.set("n", "<LeftMouse>", function()
-      if self:_handle_left_mouse() then
-        return ""
+      if not self:_handle_left_mouse() then
+        local mouse = vim.fn.getmousepos()
+        if mouse.winid > 0 and api.nvim_win_is_valid(mouse.winid) then
+          api.nvim_set_current_win(mouse.winid)
+          if mouse.line > 0 and mouse.column > 0 then
+            pcall(api.nvim_win_set_cursor, mouse.winid, { mouse.line, mouse.column - 1 })
+          end
+        end
       end
-      return "<LeftMouse>"
-    end, { buffer = bufnr, expr = true, silent = true, nowait = true })
+    end, { buffer = bufnr, silent = true, nowait = true })
   end
 end
 
@@ -218,16 +223,12 @@ function MergeView:_handle_left_mouse()
             local theirs_end = theirs_start + theirs_w
 
             if offset >= ours_start and offset <= ours_end + 1 then
-              vim.schedule(function()
-                self.merge_session:choose(entry.path, conflict_on_line, "ours")
-                self.cur_layout:sync_scroll()
-              end)
+              self.merge_session:choose(entry.path, conflict_on_line, "ours")
+              self.cur_layout:sync_scroll()
               return true
             elseif offset > ours_end + 1 and offset <= theirs_end + 2 then
-              vim.schedule(function()
-                self.merge_session:choose(entry.path, conflict_on_line, "theirs")
-                self.cur_layout:sync_scroll()
-              end)
+              self.merge_session:choose(entry.path, conflict_on_line, "theirs")
+              self.cur_layout:sync_scroll()
               return true
             else
               return true
