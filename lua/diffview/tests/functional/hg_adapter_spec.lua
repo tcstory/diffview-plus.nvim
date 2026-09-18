@@ -300,7 +300,14 @@ describe("diffview.vcs.adapters.hg", function()
       HgAdapter.bootstrap.done = true
       HgAdapter.bootstrap.ok = true
 
-      return HgAdapter({ toplevel = repo, path_args = {} }), repo
+      local get_dir = HgAdapter.get_dir
+      HgAdapter.get_dir = function(_, path)
+        return path
+      end
+      local ok, adapter = pcall(HgAdapter, { toplevel = repo, path_args = {} })
+      HgAdapter.get_dir = get_dir
+      assert.is_true(ok, adapter)
+      return adapter, repo
     end
 
     -- Mercurial's parse_fh_data iterates `#numstat - 1` times, so the

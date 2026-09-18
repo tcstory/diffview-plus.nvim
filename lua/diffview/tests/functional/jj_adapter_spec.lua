@@ -1291,14 +1291,14 @@ describe("diffview.vcs.adapters.jj", function()
           local adapter = repo.adapter()
           -- Force the null-tree branch: pretend fork_point returned nothing.
           local orig_query = adapter._query_merge_context
-          adapter._query_merge_context = function(self, callback)
-            return orig_query(self, function(err, ctx)
+          adapter._query_merge_context = async.wrap(function(self, callback)
+            orig_query(self, function(err, ctx)
               if ctx then
                 ctx.base = nil
               end
               callback(err, ctx)
             end)
-          end
+          end)
 
           local left = adapter.Rev(RevType.COMMIT, adapter.Rev.NULL_TREE_SHA)
           local right = adapter.Rev(RevType.LOCAL)
@@ -1693,7 +1693,15 @@ describe("diffview.vcs.adapters.jj", function()
       local function push_main_to(remote)
         repo.jj({ "bookmark", "create", "main", "-r", "@" })
         repo.jj({ "git", "remote", "add", "origin", remote })
-        repo.jj({ "git", "push", "--remote", "origin", "--bookmark", "main", "--allow-new" })
+        local push_args = { "git", "push", "--remote", "origin", "--bookmark", "main" }
+        local help = vim.system({ "jj", "git", "push", "--help" }, {
+          cwd = repo.dir,
+          text = true,
+        }):wait()
+        if (help.stdout or ""):find("%-%-allow%-new") then
+          push_args[#push_args + 1] = "--allow-new"
+        end
+        repo.jj(push_args)
       end
 
       it(

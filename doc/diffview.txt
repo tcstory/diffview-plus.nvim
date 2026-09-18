@@ -230,10 +230,12 @@ COMMANDS                                        *diffview-commands*
           <leader>cr          mark a manually edited region resolved
           [x / ]x             previous / next unresolved region
 
-        The file-panel winbar exposes a clickable [ ◀ ] Hide files control.
+        Each conflict has clickable OURS and THEIRS actions on the virtual
+        status line immediately above its RESULT region. The file-panel winbar
+        exposes a clickable [ ◀ ] Hide files control.
         It collapses the panel into a narrow left-side rail whose [ ▶ ]
-        control restores the list. The RESULT winbar provides OURS, THEIRS,
-        and [ APPLY ] actions. Apply is
+        control restores the list. The RESULT winbar provides previous/next
+        conflict navigation and an [ APPLY ] action. Apply is
         refused until every conflict is resolved. Once confirmed, all Result
         buffers are written to the working tree together. If any target file
         changed outside the session, nothing is written.

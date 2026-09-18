@@ -13,6 +13,14 @@ local function jj_available()
   return vim.fn.executable("jj") == 1
 end
 
+local function skip_without_jj()
+  if jj_available() then
+    return false
+  end
+  pending("jj not installed")
+  return true
+end
+
 local function run(cmd, cwd)
   local res = vim.system(cmd, { cwd = cwd, text = true }):wait()
   assert.equals(0, res.code, (table.concat(cmd, " ") .. "\n" .. (res.stderr or "")))
@@ -63,10 +71,6 @@ describe("`toggle_stage_entry` on a jj working-copy conflict", function()
   local orig_emitter, original_config, saved_bootstrap
 
   before_each(function()
-    if not jj_available() then
-      pending("jj not installed")
-      return
-    end
     orig_emitter = DiffviewGlobal.emitter
     DiffviewGlobal.emitter = EventEmitter()
     original_config = vim.deepcopy(config.get_config())
@@ -109,6 +113,9 @@ describe("`toggle_stage_entry` on a jj working-copy conflict", function()
   end
 
   it("drains the `conflicting` bucket after the sole conflict is resolved", function()
+    if skip_without_jj() then
+      return
+    end
     local repo, write = make_conflict_repo({ "file.txt" })
     local view
 
@@ -153,6 +160,9 @@ describe("`toggle_stage_entry` on a jj working-copy conflict", function()
   end)
 
   it("resolves a propagated conflict where `@` is a linear descendant of the merge", function()
+    if skip_without_jj() then
+      return
+    end
     local repo, write = make_conflict_repo({ "file.txt" })
     -- Step off the merge so `@` inherits the conflict via a single parent.
     -- This is the shape produced by `jj rebase` or a manual `jj new` after a
@@ -200,6 +210,9 @@ describe("`toggle_stage_entry` on a jj working-copy conflict", function()
   end)
 
   it("advances `cur_entry` to the remaining conflict after resolving one of two", function()
+    if skip_without_jj() then
+      return
+    end
     local repo, write = make_conflict_repo({ "a.txt", "b.txt" })
     local view
 

@@ -1,5 +1,8 @@
 local config = require("diffview.config")
 local helpers = require("diffview.tests.helpers")
+local Diff1 = require("diffview.scene.layouts.diff_1").Diff1
+local Diff3Hor = require("diffview.scene.layouts.diff_3_hor").Diff3Hor
+local Diff4Mixed = require("diffview.scene.layouts.diff_4_mixed").Diff4Mixed
 local MergeView = require("diffview.scene.views.diff.merge_view").MergeView
 local RevType = require("diffview.vcs.rev").RevType
 local vcs = require("diffview.vcs")
@@ -56,6 +59,32 @@ describe("diffview.scene.views.diff.merge_view", function()
     eq(3, entry.layout.c.file.rev.stage)
     eq(1, entry.merge_conflicts_remaining)
     assert.truthy(table.concat(vim.fn.readfile(repo .. "/file.txt"), "\n"):find("<<<<<<<", 1, true))
+  end)
+
+  it("honours the configured initial merge layout", function()
+    repo = make_conflict_repo()
+    config.get_config().view.merge_tool.layout = "diff4_mixed"
+    local err, adapter = vcs.get_adapter({ top_indicators = { repo } })
+    assert.is_nil(err)
+
+    view = MergeView({ adapter = adapter, paths = { "file.txt" } })
+    assert.is_true(view.files.conflicting[1].layout:instanceof(Diff4Mixed))
+  end)
+
+  it("does not propagate RESULT data producers to stage sides during layout conversion", function()
+    repo = make_conflict_repo()
+    local err, adapter = vcs.get_adapter({ top_indicators = { repo } })
+    assert.is_nil(err)
+
+    view = MergeView({ adapter = adapter, paths = { "file.txt" } })
+    local entry = view.files.conflicting[1]
+    entry:convert_layout(Diff1)
+    entry:convert_layout(Diff3Hor)
+
+    assert.is_nil(entry.layout.a.file.get_data)
+    assert.is_nil(entry.layout.c.file.get_data)
+    eq(RevType.STAGE, entry.layout.a.file.rev.type)
+    eq(RevType.STAGE, entry.layout.c.file.rev.type)
   end)
 
   it(
@@ -187,7 +216,7 @@ describe("diffview.scene.views.diff.merge_view", function()
       end
 
       -- Simulate click on [ OURS ] button on the virtual line above the conflict
-      local virt_screenrow = (sp and sp.row > 0) and (start_row > 0 and sp.row - 1 or sp.row + 1) or 0
+      local virt_screenrow = (sp and sp.row > 0) and sp.row - 1 or 0
       vim.api.nvim_set_current_win(view.cur_layout.a.id)
       vim.fn.getmousepos = function()
         return {
@@ -203,6 +232,9 @@ describe("diffview.scene.views.diff.merge_view", function()
       vim.fn.getmousepos = orig_getmousepos
 
       eq(true, handled_ours)
+      assert.is_true(vim.wait(1000, function()
+        return conflict.resolved and conflict.choice == "ours"
+      end))
       eq(true, conflict.resolved)
       eq("ours", conflict.choice)
       eq(0, session_entry.file_entry.merge_conflicts_remaining)
@@ -224,9 +256,41 @@ describe("diffview.scene.views.diff.merge_view", function()
       vim.fn.getmousepos = orig_getmousepos
 
       eq(true, handled_theirs)
+      assert.is_true(vim.wait(1000, function()
+        return conflict.choice == "theirs"
+      end))
       eq(true, conflict.resolved)
       eq("theirs", conflict.choice)
       eq(0, session_entry.file_entry.merge_conflicts_remaining)
+    end)
+  )
+
+  it(
+    "blocks stage-all and unstage-all mutations in a transactional merge view",
+    helpers.async_test(function()
+      repo = make_conflict_repo()
+      local err, adapter = vcs.get_adapter({ top_indicators = { repo } })
+      assert.is_nil(err)
+      local add_called, reset_called = false, false
+      adapter.add_files = function()
+        add_called = true
+        return true
+      end
+      adapter.reset_files = function()
+        reset_called = true
+        return true
+      end
+
+      view = MergeView({ adapter = adapter, paths = { "file.txt" } })
+      view:open()
+      assert.is_true(vim.wait(2000, function()
+        return view.ready and view.cur_entry ~= nil
+      end, 10))
+
+      view.emitter:emit("stage_all")
+      view.emitter:emit("unstage_all")
+      assert.is_false(add_called)
+      assert.is_false(reset_called)
     end)
   )
 end)

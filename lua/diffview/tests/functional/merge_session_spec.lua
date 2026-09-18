@@ -1,6 +1,7 @@
 local helpers = require("diffview.tests.helpers")
 local MergeSession = require("diffview.merge_session").MergeSession
 local vcs = require("diffview.vcs")
+local vcs_utils = require("diffview.vcs.utils")
 
 local eq = helpers.eq
 
@@ -124,6 +125,40 @@ describe("diffview.merge_session", function()
     assert.truthy(table.concat(vim.fn.readfile(repo .. "/file.txt"), "\n"):find("<<<<<<<", 1, true))
   end)
 
+  it("preserves manual worktree edits made before the merge session opens", function()
+    repo = make_conflict_repo()
+    local path = repo .. "/file.txt"
+    local lines = vim.fn.readfile(path)
+    local conflicts = vcs_utils.parse_conflicts(lines)
+    eq(2, #conflicts)
+    local first = conflicts[1]
+    vim.fn.writefile(vim.list_extend(
+      vim.list_extend(vim.list_slice(lines, 1, first.first - 1), { "manually resolved first" }),
+      vim.list_slice(lines, first.last + 1)
+    ), path)
+
+    local err, adapter = vcs.get_adapter({ top_indicators = { repo } })
+    assert.is_nil(err)
+    local session = MergeSession(adapter, { "file.txt" })
+    local entry = assert(session:get("file.txt"))
+
+    eq(1, #entry.conflicts)
+    assert.truthy(vim.tbl_contains(entry.result, "manually resolved first"))
+  end)
+
+  it("preserves an empty worktree result resolved before the session opens", function()
+    repo = make_conflict_repo()
+    vim.fn.writefile({}, repo .. "/file.txt", "b")
+
+    local err, adapter = vcs.get_adapter({ top_indicators = { repo } })
+    assert.is_nil(err)
+    local session = MergeSession(adapter, { "file.txt" })
+    local entry = assert(session:get("file.txt"))
+
+    eq({}, entry.result)
+    eq(0, session:counts())
+  end)
+
   it("tracks choices and applies all Result buffers only after every conflict is resolved", function()
     repo = make_conflict_repo()
     local err, adapter = vcs.get_adapter({ top_indicators = { repo } })
@@ -214,6 +249,69 @@ describe("diffview.merge_session", function()
     assert.is_false(ok)
     assert.truthy(apply_err:find("outside", 1, true))
     eq({ "external change" }, vim.fn.readfile(repo .. "/file.txt"))
+  end)
+
+  it("refuses to apply after the conflict stages change outside the session", function()
+    repo = make_conflict_repo()
+    local err, adapter = vcs.get_adapter({ top_indicators = { repo } })
+    assert.is_nil(err)
+
+    local session = MergeSession(adapter, { "file.txt" })
+    local entry = assert(session:get("file.txt"))
+    local bufnr = vim.api.nvim_create_buf(false, true)
+    vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, entry.result)
+    session:attach("file.txt", bufnr, { stats = {} })
+    session:choose_all("file.txt", "ours")
+
+    helpers.run({ "git", "add", "file.txt" }, repo)
+    local ok, apply_err = session:apply()
+    assert.is_false(ok)
+    assert.truthy(apply_err:find("Git index changed", 1, true))
+  end)
+
+  it("coalesces choose_all change notifications", function()
+    repo = make_conflict_repo()
+    local err, adapter = vcs.get_adapter({ top_indicators = { repo } })
+    assert.is_nil(err)
+
+    local session = MergeSession(adapter, { "file.txt" })
+    local entry = assert(session:get("file.txt"))
+    local bufnr = vim.api.nvim_create_buf(false, true)
+    vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, entry.result)
+    session:attach("file.txt", bufnr, { stats = {} })
+
+    local notifications = 0
+    session.on_change = function()
+      notifications = notifications + 1
+    end
+    session:choose_all("file.txt", "ours")
+    eq(1, notifications)
+  end)
+
+  it("replaces the whole Result and resolves tracking when choosing an entire side", function()
+    repo = make_conflict_repo()
+    local err, adapter = vcs.get_adapter({ top_indicators = { repo } })
+    assert.is_nil(err)
+
+    local session = MergeSession(adapter, { "file.txt" })
+    local entry = assert(session:get("file.txt"))
+    local bufnr = vim.api.nvim_create_buf(false, true)
+    vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, entry.result)
+    session:attach("file.txt", bufnr, { stats = {} })
+
+    session:choose_side("file.txt", "theirs")
+
+    eq(0, session:counts())
+    eq(entry.sides.theirs, vim.api.nvim_buf_get_lines(bufnr, 0, -1, false))
+    for _, conflict in ipairs(entry.conflicts) do
+      eq(true, conflict.resolved)
+      eq("theirs", conflict.choice)
+      eq(nil, conflict.extmark)
+    end
+
+    local ok, apply_err = session:apply()
+    assert.is_true(ok, apply_err)
+    eq(entry.sides.theirs, vim.fn.readfile(repo .. "/file.txt"))
   end)
 
   it("detects an external change that only removes the final newline", function()

@@ -174,7 +174,10 @@ function FileEntry:convert_layout(target_layout)
       path = symbol == "a" and self.oldpath or self.path,
       kind = self.kind,
       commit = self.commit,
-      get_data = get_data,
+      -- A custom producer belongs to a CUSTOM revision. Propagating it to
+      -- reconstructed STAGE/COMMIT files makes those sides render the custom
+      -- buffer instead of asking the adapter for their actual revision.
+      get_data = rev and rev.type == RevType.CUSTOM and get_data or nil,
       rev = rev,
       nulled = try_should_null(target_layout, rev, self.status, symbol),
     }) --[[@as vcs.File ]]

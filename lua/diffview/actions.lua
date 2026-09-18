@@ -848,6 +848,11 @@ function M.conflict_choose_side(target)
         end
       end
 
+      if view.merge_session and view.choose_side then
+        view:choose_side(target)
+        return
+      end
+
       local main, bufnr = get_valid_main(view)
       if not main then
         return

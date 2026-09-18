@@ -1,7 +1,6 @@
 local lazy = require("diffview.lazy")
 local oop = require("diffview.oop")
 
-local Diff3Hor = lazy.access("diffview.scene.layouts.diff_3_hor", "Diff3Hor") ---@type Diff3Hor|LazyModule
 local DiffView = lazy.access("diffview.scene.views.diff.diff_view", "DiffView") ---@type DiffView|LazyModule
 local File = lazy.access("diffview.vcs.file", "File") ---@type vcs.File|LazyModule
 local FileEntry = lazy.access("diffview.scene.file_entry", "FileEntry") ---@type FileEntry|LazyModule
@@ -9,6 +8,7 @@ local MergeSession = lazy.access("diffview.merge_session", "MergeSession") ---@t
 local NullDiffView = lazy.access("diffview.scene.views.diff.null_diff_view", "NullDiffView") ---@type NullDiffView|LazyModule
 local RevType = lazy.access("diffview.vcs.rev", "RevType") ---@type RevType|LazyModule
 local StandardView = lazy.access("diffview.scene.views.standard.standard_view", "StandardView") ---@type StandardView|LazyModule
+local View = lazy.access("diffview.scene.view", "View") ---@type View|LazyModule
 local utils = lazy.require("diffview.utils") ---@module "diffview.utils"
 
 local api = vim.api
@@ -44,16 +44,18 @@ function MergeView:init(opt)
   })
 
   -- Keep the precise DiffText highlight, but remove the broad DiffChange
-  -- wash from all three panes. Conflict state is already shown explicitly
+  -- wash from every merge layout. Conflict state is already shown explicitly
   -- by the Result extmarks and their Unresolved labels.
-  for _, symbol in ipairs({ "a", "b", "c" }) do
-    self.winopts.diff3[symbol].winhl = {
-      "DiffAdd:DiffviewDiffAdd",
-      "DiffDelete:DiffviewDiffDelete",
-      "DiffChange:Normal",
-      "DiffText:DiffviewDiffText",
-      opt = { method = "prepend" },
-    }
+  for _, layout_key in ipairs({ "diff1", "diff3", "diff4" }) do
+    for _, winopts in pairs(self.winopts[layout_key]) do
+      winopts.winhl = {
+        "DiffAdd:DiffviewDiffAdd",
+        "DiffDelete:DiffviewDiffDelete",
+        "DiffChange:Normal",
+        "DiffText:DiffviewDiffText",
+        opt = { method = "prepend" },
+      }
+    end
   end
 
   -- DiffView binds its own marker-based `file_open_post` handler while its
@@ -69,6 +71,7 @@ function MergeView:init(opt)
   self.panel.rev_pretty_name = "Transactional Merge"
 
   local entries = {}
+  local merge_layout = View.get_default_merge_layout()
   for _, path in ipairs(opt.paths) do
     local session_entry = assert(self.merge_session:get(path))
     local function make_stage_file(rev, label)
@@ -106,10 +109,11 @@ function MergeView:init(opt)
       stats = { conflicts = #session_entry.conflicts },
       kind = "conflicting",
       revs = { a = ours, b = result_rev, c = theirs, d = base },
-      layout = Diff3Hor({
+      layout = merge_layout({
         a = make_stage_file(ours, " CHANGES FROM OURS"),
         b = result_file,
         c = make_stage_file(theirs, " CHANGES FROM THEIRS"),
+        d = make_stage_file(base, " COMMON ANCESTOR"),
       }),
     })
     entry.merge_conflicts_remaining = #session_entry.conflicts
@@ -168,7 +172,7 @@ function MergeView:_install_click_handlers()
     table.insert(bufs, self.panel.bufnr)
   end
   if self.cur_layout then
-    for _, sym in ipairs({ "a", "b", "c" }) do
+    for _, sym in ipairs({ "a", "b", "c", "d" }) do
       local win = self.cur_layout[sym]
       if win and win.file and win.file.bufnr and api.nvim_buf_is_valid(win.file.bufnr) then
         table.insert(bufs, win.file.bufnr)
@@ -177,20 +181,16 @@ function MergeView:_install_click_handlers()
   end
 
   for _, bufnr in ipairs(bufs) do
-    for _, lhs in ipairs({ "<LeftMouse>", "<2-LeftMouse>", "<3-LeftMouse>", "<4-LeftMouse>" }) do
-      vim.keymap.set("n", lhs, function()
-        if self:_handle_left_mouse() then
-          return ""
-        end
-        return lhs
-      end, { buffer = bufnr, silent = true, nowait = true, expr = true })
-    end
-    vim.keymap.set("n", "]x", function()
-      self:jump_conflict(1)
-    end, { buffer = bufnr, silent = true, nowait = true, desc = "Jump to next conflict" })
-    vim.keymap.set("n", "[x", function()
-      self:jump_conflict(-1)
-    end, { buffer = bufnr, silent = true, nowait = true, desc = "Jump to previous conflict" })
+    -- Conflict navigation is installed through the normal configurable
+    -- keymap groups. Only the single-click interception is MergeView-specific;
+    -- leaving multi-click mappings alone preserves the panel's double-click
+    -- action and user mappings.
+    vim.keymap.set("n", "<LeftMouse>", function()
+      if self:_handle_left_mouse() then
+        return ""
+      end
+      return "<LeftMouse>"
+    end, { buffer = bufnr, silent = true, nowait = true, expr = true })
   end
 end
 
@@ -220,12 +220,7 @@ function MergeView:_handle_left_mouse()
         local sp = vim.fn.screenpos(result_win, mouse.line, 1)
         local is_virt_line = true
         if sp and sp.row > 0 and mouse.screenrow then
-          local s_row = self.merge_session:_range(current, conflict_on_line)
-          if s_row > 0 then
-            is_virt_line = mouse.screenrow < sp.row
-          else
-            is_virt_line = mouse.screenrow > sp.row
-          end
+          is_virt_line = mouse.screenrow < sp.row
         end
 
         if is_virt_line then
@@ -248,25 +243,34 @@ function MergeView:_handle_left_mouse()
             local theirs_end = theirs_start + theirs_w
 
             local function do_choose(choice)
-              self.merge_session:choose(entry.path, conflict_on_line, choice)
-              self.cur_layout:sync_scroll()
+              vim.schedule(function()
+                if self.closing:check() then
+                  return
+                end
+                local session_entry = self.merge_session:get(entry.path)
+                if
+                  session_entry ~= current
+                  or not session_entry.bufnr
+                  or not api.nvim_buf_is_valid(session_entry.bufnr)
+                then
+                  return
+                end
+                local ok, err = pcall(self.merge_session.choose, self.merge_session, entry.path, conflict_on_line, choice)
+                if not ok then
+                  utils.err("Unable to update merge conflict: " .. tostring(err))
+                  return
+                end
+                if self.cur_entry == entry and self.cur_layout then
+                  pcall(self.cur_layout.sync_scroll, self.cur_layout)
+                end
+              end)
             end
 
             if offset >= ours_start and offset <= ours_end + 1 then
-              local ok = pcall(do_choose, "ours")
-              if not ok then
-                vim.schedule(function()
-                  do_choose("ours")
-                end)
-              end
+              do_choose("ours")
               return true
             elseif offset > ours_end + 1 and offset <= theirs_end + 2 then
-              local ok = pcall(do_choose, "theirs")
-              if not ok then
-                vim.schedule(function()
-                  do_choose("theirs")
-                end)
-              end
+              do_choose("theirs")
               return true
             else
               return true
@@ -322,7 +326,7 @@ function MergeView:_equalize_diff_windows()
   end
   local diff_wins = {}
   local total_w = 0
-  for _, sym in ipairs({ "a", "b", "c" }) do
+  for _, sym in ipairs({ "a", "b", "c", "d" }) do
     local win = self.cur_layout[sym]
     if win and win.id and api.nvim_win_is_valid(win.id) then
       table.insert(diff_wins, win.id)
@@ -382,6 +386,15 @@ function MergeView:choose_all_conflicts(choice)
     return
   end
   self.merge_session:choose_all(self.cur_entry.path, choice)
+  self.cur_layout:sync_scroll()
+end
+
+---@param choice "ours"|"base"|"theirs"
+function MergeView:choose_side(choice)
+  if not self.cur_entry then
+    return
+  end
+  self.merge_session:choose_side(self.cur_entry.path, choice)
   self.cur_layout:sync_scroll()
 end
 
@@ -458,20 +471,6 @@ _G.DiffviewMergePanelClick = function()
   local view = require("diffview.lib").get_current_view()
   if view and view.merge_session and view.toggle_file_panel_width then
     view:toggle_file_panel_width()
-  end
-end
-
-_G.DiffviewMergeOursClick = function()
-  local view = require("diffview.lib").get_current_view()
-  if view and view.choose_conflict then
-    view:choose_conflict("ours")
-  end
-end
-
-_G.DiffviewMergeTheirsClick = function()
-  local view = require("diffview.lib").get_current_view()
-  if view and view.choose_conflict then
-    view:choose_conflict("theirs")
   end
 end
 

@@ -23,14 +23,15 @@ local M = {}
 ---@class MergeSession.Entry
 ---@field path string
 ---@field absolute_path string
----@field original string[]
 ---@field original_bytes? string
 ---@field existed boolean
 ---@field mode? integer
 ---@field endofline boolean
 ---@field line_ending "\n"|"\r\n"
 ---@field result string[]
+---@field sides table<"ours"|"base"|"theirs", string[]>
 ---@field conflicts MergeSession.Conflict[]
+---@field stage_oids table<integer, string|false>
 ---@field bufnr? integer
 ---@field file_entry? FileEntry
 
@@ -45,6 +46,20 @@ local MergeSession = oop.create_class("MergeSession")
 
 local function copy_lines(lines)
   return vim.deepcopy(lines or {})
+end
+
+---@param bytes string
+---@return string[]
+local function bytes_to_lines(bytes)
+  if bytes == "" then
+    return {}
+  end
+  local normalized = bytes:gsub("\r\n", "\n")
+  local lines = vim.split(normalized, "\n", { plain = true })
+  if normalized:sub(-1) == "\n" then
+    table.remove(lines)
+  end
+  return lines
 end
 
 ---@param path string
@@ -98,13 +113,26 @@ end
 
 ---@param adapter GitAdapter
 ---@param path string
+---@param stage integer
+---@return string|false
+local function read_stage_oid(adapter, path, stage)
+  local out, code = adapter:exec_sync({ "rev-parse", "--verify", (":%d:%s"):format(stage, path) }, {
+    cwd = adapter.ctx.toplevel,
+    silent = true,
+  })
+  return code == 0 and out[1] or false
+end
+
+---@param adapter GitAdapter
+---@param path string
 ---@return string[]? merged
 ---@return integer? conflict_count
+---@return table<"ours"|"base"|"theirs", string[]>? sides
 ---@return string? err
 local function diff3_merge(adapter, path)
   local temp_dir = vim.fn.tempname()
   if vim.fn.mkdir(temp_dir, "p") ~= 1 then
-    return nil, nil, "Unable to create a temporary merge directory"
+    return nil, nil, nil, "Unable to create a temporary merge directory"
   end
 
   local paths = {
@@ -113,12 +141,16 @@ local function diff3_merge(adapter, path)
     theirs = pl:join(temp_dir, "theirs"),
   }
 
-  local base_stage = read_stage(adapter, path, 1)
-  local has_base = base_stage ~= nil and #base_stage > 0
+  local sides = {
+    ours = read_stage(adapter, path, 2) or {},
+    base = read_stage(adapter, path, 1) or {},
+    theirs = read_stage(adapter, path, 3) or {},
+  }
+  local has_base = read_stage_oid(adapter, path, 1) ~= false
 
-  vim.fn.writefile(read_stage(adapter, path, 2) or {}, paths.ours, "b")
-  vim.fn.writefile(base_stage or {}, paths.base, "b")
-  vim.fn.writefile(read_stage(adapter, path, 3) or {}, paths.theirs, "b")
+  vim.fn.writefile(sides.ours, paths.ours, "b")
+  vim.fn.writefile(sides.base, paths.base, "b")
+  vim.fn.writefile(sides.theirs, paths.theirs, "b")
 
   local cmd = { "merge-file", "-p" }
   if has_base then
@@ -137,15 +169,16 @@ local function diff3_merge(adapter, path)
 
   -- `git merge-file --stdout` returns the conflict count, capped at 127.
   if not code or code > 127 then
-    return nil, nil, table.concat(stderr or { "git merge-file failed" }, "\n")
+    return nil, nil, nil, table.concat(stderr or { "git merge-file failed" }, "\n")
   end
-  return out, code
+  return out, code, sides
 end
 
 ---@param merged string[]
+---@param fallbacks? MergeSession.Conflict[]
 ---@return string[] result
 ---@return MergeSession.Conflict[] conflicts
-local function clean_result(merged)
+local function clean_result(merged, fallbacks)
   local parsed = vcs_utils.parse_conflicts(merged)
   local result = {}
   local conflicts = {}
@@ -157,6 +190,17 @@ local function clean_result(merged)
     end
 
     local base = copy_lines(region.base.content)
+    if #base == 0 and fallbacks then
+      for _, fallback in ipairs(fallbacks) do
+        if
+          vim.deep_equal(fallback.ours, region.ours.content)
+          and vim.deep_equal(fallback.theirs, region.theirs.content)
+        then
+          base = copy_lines(fallback.base)
+          break
+        end
+      end
+    end
     local start_line = #result + 1
     vim.list_extend(result, base)
     conflicts[#conflicts + 1] = {
@@ -187,27 +231,41 @@ function MergeSession:init(adapter, paths)
   self.namespace = api.nvim_create_namespace("diffview_transactional_merge")
 
   for _, path in ipairs(paths) do
-    local merged, conflict_count, err = diff3_merge(adapter, path)
+    local merged, conflict_count, sides, err = diff3_merge(adapter, path)
     if not merged then
       error(("Failed to prepare merge result for '%s': %s"):format(path, err or "unknown error"))
     end
-    local result, conflicts = clean_result(merged)
-    if conflict_count > 0 and #conflicts == 0 then
-      error(("Failed to identify the unresolved regions in '%s'"):format(path))
-    end
     local absolute_path = pl:absolute(path, adapter.ctx.toplevel)
     local original_bytes, stat = read_file_snapshot(absolute_path)
+    -- The worktree can already contain partial manual resolutions. Use it as
+    -- the source of truth when present, while still caching the three index
+    -- stages for whole-side choices and stale-index validation.
+    local generated_result, generated_conflicts = clean_result(merged)
+    local result, conflicts
+    if original_bytes ~= nil then
+      result, conflicts = clean_result(bytes_to_lines(original_bytes), generated_conflicts)
+    else
+      result, conflicts = generated_result, generated_conflicts
+    end
+    if original_bytes == nil and conflict_count > 0 and #conflicts == 0 then
+      error(("Failed to identify the unresolved regions in '%s'"):format(path))
+    end
     local entry = {
       path = path,
       absolute_path = absolute_path,
-      original = original_bytes and vim.fn.readfile(absolute_path) or {},
       original_bytes = original_bytes,
       existed = stat ~= nil,
       mode = stat and stat.mode or nil,
       endofline = original_bytes ~= nil and original_bytes:sub(-1) == "\n",
       line_ending = original_bytes and original_bytes:find("\r\n", 1, true) and "\r\n" or "\n",
       result = result,
+      sides = assert(sides),
       conflicts = conflicts,
+      stage_oids = {
+        [1] = read_stage_oid(adapter, path, 1),
+        [2] = read_stage_oid(adapter, path, 2),
+        [3] = read_stage_oid(adapter, path, 3),
+      },
     }
     self.entries[path] = entry
     self.order[#self.order + 1] = path
@@ -291,12 +349,11 @@ function MergeSession:_place_mark(entry, conflict)
       { "[ THEIRS ]", "DiffviewFilePanelDeletions" },
     }
   end
-  local above = start_row > 0
   conflict.extmark = api.nvim_buf_set_extmark(entry.bufnr, self.namespace, start_row, 0, {
     end_row = end_row,
     end_col = 0,
     virt_lines = { virt_line },
-    virt_lines_above = above,
+    virt_lines_above = true,
     right_gravity = false,
     end_right_gravity = true,
   })
@@ -321,8 +378,29 @@ function MergeSession:_changed(entry)
   if entry.file_entry then
     entry.file_entry.merge_conflicts_remaining = self:entry_remaining(entry)
   end
-  if self.on_change then
+  if self._update_depth and self._update_depth > 0 then
+    self._pending_changes = self._pending_changes or {}
+    self._pending_changes[entry] = true
+  elseif self.on_change then
     self.on_change(self, entry)
+  end
+end
+
+function MergeSession:_begin_update()
+  self._update_depth = (self._update_depth or 0) + 1
+end
+
+function MergeSession:_end_update()
+  self._update_depth = math.max((self._update_depth or 1) - 1, 0)
+  if self._update_depth > 0 then
+    return
+  end
+  local pending = self._pending_changes or {}
+  self._pending_changes = nil
+  if self.on_change then
+    for entry in pairs(pending) do
+      self.on_change(self, entry)
+    end
   end
 end
 
@@ -409,12 +487,39 @@ end
 ---@param choice "ours"|"base"|"theirs"|"all"|"manual"|"none"
 function MergeSession:choose_all(path, choice)
   local entry = assert(self.entries[path])
-  for _, conflict in ipairs(entry.conflicts) do
-    if not conflict.resolved then
-      local start_row = self:_range(entry, conflict)
-      self:choose(path, start_row + 1, choice)
+  self:_begin_update()
+  local ok, err = pcall(function()
+    for _, conflict in ipairs(entry.conflicts) do
+      if not conflict.resolved then
+        local start_row = self:_range(entry, conflict)
+        self:choose(path, start_row + 1, choice)
+      end
     end
+  end)
+  self:_end_update()
+  if not ok then
+    error(err)
   end
+end
+
+---@param path string
+---@param choice "ours"|"base"|"theirs"
+function MergeSession:choose_side(path, choice)
+  local entry = assert(self.entries[path])
+  local content = copy_lines(assert(entry.sides[choice]))
+  entry.result = content
+
+  if entry.bufnr and api.nvim_buf_is_valid(entry.bufnr) then
+    api.nvim_buf_clear_namespace(entry.bufnr, self.namespace, 0, -1)
+    api.nvim_buf_set_lines(entry.bufnr, 0, -1, false, content)
+  end
+
+  for _, conflict in ipairs(entry.conflicts) do
+    conflict.resolved = true
+    conflict.choice = choice
+    conflict.extmark = nil
+  end
+  self:_changed(entry)
 end
 
 ---@param path string
@@ -462,6 +567,11 @@ function MergeSession:apply()
 
   for _, path in ipairs(self.order) do
     local entry = self.entries[path]
+    for stage = 1, 3 do
+      if read_stage_oid(self.adapter, path, stage) ~= entry.stage_oids[stage] then
+        return false, ("Git index changed outside the merge session: %s (stage %d)"):format(path, stage)
+      end
+    end
     local current_bytes, stat = read_file_snapshot(entry.absolute_path)
     if (stat ~= nil) ~= entry.existed or current_bytes ~= entry.original_bytes then
       return false, ("Working-tree file changed outside the merge session: %s"):format(path)

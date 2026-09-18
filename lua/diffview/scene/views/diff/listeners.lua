@@ -685,6 +685,10 @@ return function(view)
       view.emitter:emit(EventName.FILES_STAGED, view)
     end,
     stage_all = function()
+      if view.merge_session then
+        utils.warn("Staging is disabled in a transactional merge view. Apply the Result first.")
+        return
+      end
       local args = vim.tbl_map(function(file)
         return file.path
       end, utils.vec_join(view.files.working, view.files.conflicting))
@@ -705,6 +709,10 @@ return function(view)
       end
     end,
     unstage_all = function()
+      if view.merge_session then
+        utils.warn("Unstaging is disabled in a transactional merge view. Close it before changing the index.")
+        return
+      end
       local success = view.adapter:reset_files()
 
       if not success then
