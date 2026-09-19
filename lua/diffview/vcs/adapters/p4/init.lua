@@ -25,7 +25,8 @@ local await, pawait = async.await, async.pawait
 local fmt = string.format
 local logger = DiffviewGlobal.logger
 local pl = lazy.access(utils, "path") --[[@as PathLib ]]
-local uv = vim.loop
+-- :h vim.uv — vim.loop is a deprecated alias; use vim.uv in Neovim 0.12+.
+local uv = vim.uv
 
 local M = {}
 
