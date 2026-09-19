@@ -13,12 +13,9 @@
 
 local api = vim.api
 
--- `vim.text.diff` was added in Nvim 0.12; `vim.diff` is still supported
--- but marked deprecated by LuaLS. Alias once here so the eventual switch
--- to `vim.text.diff` (when the plugin's minimum Neovim version is raised
--- to 0.12) is a single-line change.
----@diagnostic disable-next-line: deprecated
-local diff = vim.diff
+-- `vim.text.diff` is the stable 0.12 API. `:h vim.text.diff()`
+-- `vim.diff` is a compatibility alias that LuaLS marks as deprecated.
+local diff = vim.text.diff
 
 local M = {}
 
@@ -26,22 +23,23 @@ M.ns = api.nvim_create_namespace("diffview_inline_diff")
 
 -- Confine inline-diff extmarks to the diffview window so they don't
 -- leak into other windows displaying the same buffer (issue #156).
--- Two APIs:
---   * stable `nvim_win_add_ns`/`nvim_win_remove_ns` (0.12+)
---   * experimental `nvim__ns_set` (0.11; the `{wins = {...}}` shape
---     has been steady).
--- Use the stable pair only when *both* halves ship; otherwise fall
--- back to `nvim__ns_set` if present. With neither available,
--- `WIN_SCOPE_SUPPORTED` is false and `attach_to_window` degrades to a
--- one-shot warning.
--- TODO: drop the experimental fallback when the plugin's minimum
--- Neovim version is raised to 0.12.
-local has_stable_pair = api.nvim_win_add_ns ~= nil and api.nvim_win_remove_ns ~= nil
-local win_add_ns = has_stable_pair and api.nvim_win_add_ns or nil ---@type (fun(win: integer, ns: integer): boolean?)?
-local win_remove_ns = has_stable_pair and api.nvim_win_remove_ns or nil ---@type (fun(win: integer, ns: integer): boolean?)?
----@diagnostic disable-next-line: undefined-field -- experimental 0.11 API.
-local ns_set = api.nvim__ns_set ---@type fun(ns: integer, opts: table): table?
-local WIN_SCOPE_SUPPORTED = has_stable_pair or ns_set ~= nil
+--
+-- The stable API pair `nvim_win_add_ns` / `nvim_win_remove_ns` was not
+-- yet available in the 0.12.x patch series verified on the development
+-- machine (0.12.41). When it ships in a future Neovim release this block
+-- will activate automatically without any code change.
+--
+-- The experimental `nvim__ns_set` fallback has been removed per the
+-- refactor plan (REFACTOR_PLAN.md §Phase 1: "移除所有 nvim__* experimental
+-- fallback"). Using experimental APIs produces undefined behaviour across
+-- patch releases and is explicitly banned by the project's API policy.
+--
+-- When neither stable API is present, `WIN_SCOPE_SUPPORTED` is false and
+-- `attach_to_window` degrades to a one-shot warning (see below).
+-- `:h nvim_win_add_ns`  — stable from Neovim 0.12 (future patch).
+local win_add_ns = api.nvim_win_add_ns ---@type (fun(win: integer, ns: integer): boolean?)?
+local win_remove_ns = api.nvim_win_remove_ns ---@type (fun(win: integer, ns: integer): boolean?)?
+local WIN_SCOPE_SUPPORTED = win_add_ns ~= nil and win_remove_ns ~= nil
 
 -- Upper bound on `string.rep(" ", pad)` per virt_line. Real terminal widths
 -- are well under this; the cap exists to bound memory on unusually wide
@@ -91,46 +89,31 @@ local function full_width_target(bufnr, hint_winid)
 end
 
 -- Iterate over UTF-8 characters in `s`. Each step yields the character
--- substring, its 0-indexed byte offset, and its byte length. Pure-Lua O(n)
--- traversal: avoids the quadratic cost of `vim.fn.strcharpart(s, i, 1)` in
--- a per-character loop, which matters on long modified lines.
--- TODO: if the plugin's minimum Neovim version is raised to 0.12, replace
--- this decoder with `vim.str_utf_pos(s)`, which returns the byte start
--- positions of each UTF-8 character in a single call.
+-- substring, its 0-indexed byte offset, and its byte length.
+--
+-- Uses `vim.str_utf_pos(s)` (:h vim.str_utf_pos) which returns a list of
+-- 1-indexed byte start positions for each UTF-8 character in a single C
+-- call — far cheaper than a per-character Lua loop on long lines.
+-- The character length is derived from consecutive start positions.
 ---@param s string
 ---@return fun(): string?, integer?, integer?
 local function utf8_iter(s)
+  -- :h vim.str_utf_pos — returns 1-indexed byte start positions.
+  local positions = vim.str_utf_pos(s)
+  local n = #positions
   local len = #s
-  local pos = 1
+  local i = 0
   return function()
-    if pos > len then
+    i = i + 1
+    if i > n then
       return nil
     end
-    local b = s:byte(pos)
-    local char_len
-    if b < 0x80 then
-      char_len = 1
-    elseif b < 0xC2 then
-      -- Stray continuation byte or overlong lead; fall back to a single byte
-      -- so malformed input still makes forward progress.
-      char_len = 1
-    elseif b < 0xE0 then
-      char_len = 2
-    elseif b < 0xF0 then
-      char_len = 3
-    elseif b < 0xF8 then
-      char_len = 4
-    else
-      char_len = 1
-    end
-    local remaining = len - pos + 1
-    if char_len > remaining then
-      char_len = remaining
-    end
-    local ch = s:sub(pos, pos + char_len - 1)
-    local start = pos - 1
-    pos = pos + char_len
-    return ch, start, char_len
+    local byte_start = positions[i] -- 1-indexed
+    local byte_end = (i < n) and (positions[i + 1] - 1) or len
+    local char_len = byte_end - byte_start + 1
+    local ch = s:sub(byte_start, byte_end)
+    local offset = byte_start - 1 -- callers expect 0-indexed offset
+    return ch, offset, char_len
   end
 end
 
@@ -1434,9 +1417,13 @@ local function maybe_warn_leak(bufnr, winid)
   for _, w in ipairs(vim.fn.win_findbuf(bufnr)) do
     if w ~= winid then
       leak_warned = true
+      -- The stable `nvim_win_add_ns`/`nvim_win_remove_ns` API is not yet
+      -- available in this Neovim build.  This warning fires at most once per
+      -- session to avoid noise during long file-history walks.
       vim.notify(
         "diffview+: `diff1_inline` highlights may leak into other windows showing this file. "
-          .. "Upgrade to Neovim 0.11+ to fix.",
+          .. "This will resolve automatically when a future Neovim release ships the stable "
+          .. "`nvim_win_add_ns`/`nvim_win_remove_ns` API.",
         vim.log.levels.WARN
       )
       return
@@ -1461,6 +1448,11 @@ function M.attach_to_window(bufnr, winid)
     return
   end
   if not WIN_SCOPE_SUPPORTED then
+    -- Stable window-namespace API (`nvim_win_add_ns`) is not available in
+    -- the current Neovim build.  Emit a one-shot warning so users know
+    -- inline-diff decorations may be visible in other windows that show the
+    -- same buffer.  This will resolve automatically when a Neovim release
+    -- ships the stable `nvim_win_add_ns`/`nvim_win_remove_ns` pair.
     maybe_warn_leak(bufnr, winid)
     return
   end
@@ -1468,28 +1460,15 @@ function M.attach_to_window(bufnr, winid)
   if set[winid] then
     return
   end
-  local ok
-  if win_add_ns then
-    ok = pcall(win_add_ns, winid, M.ns)
-  else
-    -- The experimental `nvim__ns_set` replaces the entire window list
-    -- in one call, so collect every previously-scoped winid (across
-    -- all buffers, since the list is per-namespace not per-buffer)
-    -- plus the new one and pass them together. Stale winids are
-    -- filtered out so a closed window doesn't carry forward.
-    local wins = { winid }
-    for _, other in pairs(M._scoped_wins_by_buf) do
-      for w in pairs(other) do
-        if w ~= winid and api.nvim_win_is_valid(w) then
-          wins[#wins + 1] = w
-        end
-      end
-    end
-    ok = pcall(ns_set, M.ns, { wins = wins })
-  end
+  -- :h nvim_win_add_ns — add namespace `M.ns` to window `winid` so that
+  -- extmarks in that namespace render only in this window.
+  local ok = pcall(win_add_ns, winid, M.ns)
   if not ok then
     return
   end
+  -- Transfer ownership: if another buffer previously registered this
+  -- window, remove it so a detach of the old buffer doesn't strip the
+  -- namespace from a window the current buffer still relies on.
   for other_bufnr, other in pairs(M._scoped_wins_by_buf) do
     if other_bufnr ~= bufnr and other[winid] then
       other[winid] = nil
@@ -1517,27 +1496,12 @@ detach_from_all_windows = function(bufnr)
   if not set then
     return
   end
-  if win_remove_ns then
-    for winid in pairs(set) do
-      if api.nvim_win_is_valid(winid) then
-        pcall(win_remove_ns, winid, M.ns)
-      end
+  -- :h nvim_win_remove_ns — remove namespace from each window that was
+  -- previously scoped for this buffer.
+  for winid in pairs(set) do
+    if api.nvim_win_is_valid(winid) then
+      pcall(win_remove_ns, winid, M.ns)
     end
-  else
-    -- Experimental fallback: rebuild the namespace's window list from
-    -- the remaining buffers' scoped winids, dropping the ones tied to
-    -- `bufnr`.
-    local wins = {}
-    for other_bufnr, other in pairs(M._scoped_wins_by_buf) do
-      if other_bufnr ~= bufnr then
-        for w in pairs(other) do
-          if api.nvim_win_is_valid(w) then
-            wins[#wins + 1] = w
-          end
-        end
-      end
-    end
-    pcall(ns_set, M.ns, { wins = wins })
   end
   M._scoped_wins_by_buf[bufnr] = nil
 end

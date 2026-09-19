@@ -181,8 +181,17 @@ function View:open()
   -- reach into diffview.lib to call add_view().
   require("diffview.lib").add_view(self)
 
-  vim.cmd("tab split")
-  self.tabpage = api.nvim_get_current_tabpage()
+  -- :h nvim_open_tabpage(bufnr, enter, opts)
+  --   bufnr  = 0      → use the current buffer in the new tab
+  --   enter  = true   → make the new tabpage current immediately
+  --   opts   = {}     → no extra options required
+  --
+  -- Prefer this over `vim.cmd("tab split")` because:
+  --   • nvim_open_tabpage does not fire BufEnter for the existing tab's
+  --     buffers, avoiding unwanted autocmd side-effects in integrating plugins.
+  --   • The return value is the tabpage handle, directly usable with
+  --     other nvim_* API calls.
+  self.tabpage = api.nvim_open_tabpage(0, true, {})
   self:init_layout()
   self:post_open()
   apply_diffopt(self)

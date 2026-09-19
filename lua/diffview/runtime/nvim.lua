@@ -85,22 +85,21 @@ function M.prev_hunk(winid)
   end)
 end
 
---- Open a new tabpage and return its handle.
+--- Open a new tabpage using the current buffer and return its handle.
 ---
---- Prefer this over `tabnew` or `tab split` command strings because:
----   - `nvim_open_tabpage` does not move the cursor or fire BufEnter for the
----     existing tab's buffers, avoiding unwanted side effects.
----   - The return value is the tabpage handle, usable with other `nvim_*` APIs.
+--- Prefer this over `vim.cmd("tabnew")` or `vim.cmd("tab split")` because:
+---   - `nvim_open_tabpage` returns the tabpage handle directly.
+---   - `enter = true` makes the new tabpage current without a separate
+---     `nvim_set_current_tabpage` call.
 ---
---- :h nvim_open_tabpage   (NOTE: this function exists in 0.12; verify with :version)
----
---- FALLBACK: If `nvim_open_tabpage` is not yet available in a targeted older
---- patch, use `vim.cmd("tabnew")` and capture `vim.api.nvim_get_current_tabpage()`.
+--- :h nvim_open_tabpage(bufnr, enter, opts)
+---   bufnr = 0     → use the current buffer in the new tab
+---   enter = true  → switch to the new tabpage immediately
+---   opts  = {}    → no extra options
 ---@return integer tabpage
 function M.open_tabpage()
-  -- :h nvim_open_tabpage — opens a new, empty tabpage.
-  -- Returns the tabpage handle (integer).
-  return api.nvim_open_tabpage(-1, false)
+  -- :h nvim_open_tabpage
+  return api.nvim_open_tabpage(0, true, {})
 end
 
 --- Get the value of a window-scoped option.

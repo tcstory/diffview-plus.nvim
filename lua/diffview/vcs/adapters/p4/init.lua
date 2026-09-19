@@ -91,7 +91,7 @@ function P4Adapter.get_repo_paths(path_args, cpath)
     logger:error("[P4Adapter] Could not determine Perforce client root via 'p4 info'.")
     -- Cannot reliably determine indicators without client root.
     -- Maybe fallback to cpath or cwd?
-    table.insert(top_indicators, cpath or vim.loop.cwd())
+    table.insert(top_indicators, cpath or uv.cwd())
     return path_args or {}, top_indicators -- Return original args and best guess
   end
 

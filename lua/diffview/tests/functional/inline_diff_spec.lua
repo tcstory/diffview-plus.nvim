@@ -2179,13 +2179,12 @@ describe("diffview.scene.inline_diff", function()
   end)
 
   describe("window scoping", function()
-    -- Mirror `WIN_SCOPE_SUPPORTED` exactly so the test gate doesn't
-    -- disagree with the implementation on edge builds that ship only
-    -- one half of the stable pair. The leak-warning path is covered
-    -- by a separate test. Bracket-index `nvim__ns_set` to keep
-    -- `type-check-tests` clean of `undefined-field`.
-    local supported = (api.nvim_win_add_ns ~= nil and api.nvim_win_remove_ns ~= nil)
-      or api["nvim__ns_set"] ~= nil
+    -- Mirror `WIN_SCOPE_SUPPORTED` exactly so the test gate matches the
+    -- implementation. Only the stable `nvim_win_add_ns`/`nvim_win_remove_ns`
+    -- pair is used — the experimental `nvim__ns_set` fallback was removed in
+    -- Phase 1 per the refactor plan (REFACTOR_PLAN.md §"移除所有 nvim__* experimental
+    -- fallback"). The leak-warning path is covered by a separate test below.
+    local supported = api.nvim_win_add_ns ~= nil and api.nvim_win_remove_ns ~= nil
 
     if supported then
       it("attach_to_window records the scoped winid in _scoped_wins_by_buf", function()
@@ -2276,23 +2275,21 @@ describe("diffview.scene.inline_diff", function()
       end)
     end
 
-    -- Simulate Neovim < 0.11 by stripping the scope APIs from `vim.api`
-    -- and re-loading the module so `WIN_SCOPE_SUPPORTED` is captured as
-    -- false. Runs on every Neovim version so the fallback path is
-    -- exercised even on builds where the scope API exists.
+    -- Simulate a Neovim build without the stable window-namespace API by
+    -- stripping nvim_win_add_ns / nvim_win_remove_ns from `vim.api` and
+    -- re-loading the module so `WIN_SCOPE_SUPPORTED` is captured as false.
+    -- Runs on every Neovim version so the fallback warning path is exercised
+    -- even on builds that ship the stable pair.
     it(
       "emits a one-shot warning when no scope API is available and the buffer is shared",
       function()
         local real_add = api.nvim_win_add_ns
         local real_remove = api.nvim_win_remove_ns
-        -- Bracket-indexed so LuaLS doesn't flag the experimental field.
-        local real_set = api["nvim__ns_set"]
         local real_notify = vim.notify
         local notifications = {}
 
         api.nvim_win_add_ns = nil
         api.nvim_win_remove_ns = nil
-        api["nvim__ns_set"] = nil
         vim.notify = function(msg, level)
           notifications[#notifications + 1] = { msg = msg, level = level }
         end
@@ -2327,12 +2324,9 @@ describe("diffview.scene.inline_diff", function()
         -- Restore the API and put the *original* module instance back
         -- into `package.loaded` so subsequent tests' `inline_diff`
         -- upvalue (captured at file load time) keeps matching what
-        -- `require` returns now. Without this, the stripped instance
-        -- would linger in `package.loaded` and the autocmds re-registered
-        -- against it would diverge from the upvalue's state tables.
+        -- `require` returns now.
         api.nvim_win_add_ns = real_add
         api.nvim_win_remove_ns = real_remove
-        api["nvim__ns_set"] = real_set
         vim.notify = real_notify
         package.loaded["diffview.scene.inline_diff"] = inline_diff
 

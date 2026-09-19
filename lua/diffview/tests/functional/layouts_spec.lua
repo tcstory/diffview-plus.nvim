@@ -580,12 +580,13 @@ describe("diffview.layout symbols", function()
     local inline_diff = require("diffview.scene.inline_diff")
     local api = vim.api
     -- Mirrors `WIN_SCOPE_SUPPORTED` in `inline_diff.lua`: the namespace
-    -- scoping APIs landed in 0.11 (`nvim__ns_set`) / 0.12
-    -- (`nvim_win_add_ns`); on older Neovim `attach_to_window` is a
-    -- one-shot warning and never populates `_scoped_wins_by_buf`.
-    -- Bracket-index `nvim__ns_set` to keep type-check-tests clean.
-    local scope_supported = (api.nvim_win_add_ns ~= nil and api.nvim_win_remove_ns ~= nil)
-      or api["nvim__ns_set"] ~= nil
+    -- The stable window-namespace scoping API (`nvim_win_add_ns` /
+    -- `nvim_win_remove_ns`) was not available in the 0.12.x patch series
+    -- at the time of this refactor (0.12.41). The experimental
+    -- `nvim__ns_set` fallback was removed in Phase 1.
+    -- On builds where neither stable API is present, `attach_to_window`
+    -- emits a one-shot warning and never populates `_scoped_wins_by_buf`.
+    local scope_supported = api.nvim_win_add_ns ~= nil and api.nvim_win_remove_ns ~= nil
 
     it(
       "renders extmarks on the b buffer before it is opened in a window",
@@ -976,11 +977,12 @@ describe("diffview.layout symbols", function()
     local Diff1Inline = require("diffview.scene.layouts.diff_1_inline").Diff1Inline
     local inline_diff = require("diffview.scene.inline_diff")
     local api = vim.api
-    -- See the `_prerender` block's note: on pre-0.11 Neovim there's no
-    -- scoping API, so `attach_to_window` (and by extension `create_post`)
-    -- can't populate `_scoped_wins_by_buf`.
-    local scope_supported = (api.nvim_win_add_ns ~= nil and api.nvim_win_remove_ns ~= nil)
-      or api["nvim__ns_set"] ~= nil
+    -- See the `_prerender` block: the experimental `nvim__ns_set` fallback
+    -- was removed in Phase 1 (REFACTOR_PLAN.md). Only the stable
+    -- `nvim_win_add_ns`/`nvim_win_remove_ns` pair is used now.
+    -- On builds without the stable API, `attach_to_window` (and by
+    -- extension `create_post`) can't populate `_scoped_wins_by_buf`.
+    local scope_supported = api.nvim_win_add_ns ~= nil and api.nvim_win_remove_ns ~= nil
 
     it(
       "scopes the inline namespace to self.b.id before open_files runs",
