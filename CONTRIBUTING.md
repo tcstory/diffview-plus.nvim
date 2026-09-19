@@ -14,7 +14,7 @@ make test                                                       # run the full s
 TEST_PATH=lua/diffview/tests/functional/foo_spec.lua make test  # a single file
 ```
 
-Requires Neovim >= 0.10.0 with [`plenary.nvim`](https://github.com/nvim-lua/plenary.nvim);
+Requires Neovim >= 0.12.0 with [`plenary.nvim`](https://github.com/nvim-lua/plenary.nvim);
 see `scripts/test_init.lua` for how dependencies are fetched.
 
 ### Formatting (stylua)

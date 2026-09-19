@@ -12,7 +12,7 @@ file history from a unified view.
 
 ## Requirements
 
-- Neovim ≥ 0.10.0 (with LuaJIT)
+- Neovim ≥ 0.12.0 (with LuaJIT)
 - [nvim-web-devicons](https://github.com/nvim-tree/nvim-web-devicons) or [mini.icons](https://github.com/echasnovski/mini.nvim/blob/main/readmes/mini-icons.md) (optional) for file icons
 
 Supported VCS (at least one required):

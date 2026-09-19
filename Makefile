@@ -1,6 +1,26 @@
 .PHONY: all
 all: dev test
 
+# `make check` is the single quality gate used in CI and before each commit.
+# It runs (in order):
+#   1. StyLua formatting check (lua/)
+#   2. LuaLS type-check (source files only; fails on any diagnostic)
+#   3. Config schema validation
+#   4. Full test suite
+# Each step is guarded so the first failure is visible immediately.
+.PHONY: check
+check: fmt-check type-check check-config-schema test
+
+# Apply StyLua formatting to all Lua source and test files.
+.PHONY: fmt
+fmt:
+	stylua lua/
+
+# Check StyLua formatting without modifying files (CI-safe).
+.PHONY: fmt-check
+fmt-check:
+	stylua --check lua/
+
 TEST_PATH := $(if $(TEST_PATH),$(TEST_PATH),lua/diffview/tests/)
 export TEST_PATH
 

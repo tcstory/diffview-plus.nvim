@@ -5,6 +5,29 @@ local await, pawait = async.await, async.pawait
 
 local M = {}
 
+--- Skip the current spec file when `binary` is not available on PATH.
+---
+--- Call this at the *top* of any spec that requires an optional VCS tool
+--- (e.g. `hg`, `jj`, `p4`) so the whole file is skipped rather than each
+--- individual test failing with a confusing error.
+---
+--- Usage:
+---   helpers.skip_if_missing("hg")
+---
+---@param binary string  Executable name to probe (e.g. "hg", "jj", "p4").
+function M.skip_if_missing(binary)
+  -- vim.fn.exepath returns "" when the binary is not on PATH.
+  if vim.fn.exepath(binary) == "" then
+    -- Plenary exposes pending() to mark a spec as "skipped".
+    -- We call error() with a special prefix that Plenary treats as a
+    -- pending/skip signal when run under PlenaryBustedDirectory.
+    pending(string.format("Skipping: '%s' not found on PATH", binary))
+    -- In case this is executed outside Plenary's pending() context,
+    -- raise a soft error so the caller cannot accidentally proceed.
+    error(string.format("skip: '%s' not found on PATH", binary), 0)
+  end
+end
+
 function M.eq(a, b)
   if a == nil or b == nil then
     return assert.are.equal(a, b)
