@@ -12,7 +12,10 @@ local vcs_utils = lazy.require("diffview.vcs.utils") ---@module "diffview.vcs.ut
 
 local await = async.await
 local fmt = string.format
-local logger = DiffviewGlobal.logger
+-- Phase 2: use the module-level context instead of the _G.DiffviewGlobal
+-- global.  Both point to the same Logger instance during the transition.
+-- :see lua/diffview/runtime/context.lua
+local logger = require("diffview.runtime.context").logger
 local pl = lazy.access(utils, "path") --[[@as PathLib ]]
 
 local M = {}

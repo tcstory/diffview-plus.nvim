@@ -21,7 +21,8 @@ local GitAdapter = lazy.access("diffview.vcs.adapters.git", "GitAdapter") ---@ty
 local api = vim.api
 local await = async.await
 local fmt = string.format
-local logger = DiffviewGlobal.logger
+local ctx = require("diffview.runtime.context") ---@module "diffview.runtime.context"
+local logger = ctx.logger
 local pl = lazy.access(utils, "path") --[[@as PathLib ]]
 
 local rev_lib = lazy.require("diffview.vcs.rev") ---@module "diffview.vcs.rev"
@@ -360,7 +361,7 @@ function DiffView:_init_selection_events()
     if self._save_selections then
       self._save_selections()
     end
-    DiffviewGlobal.emitter:emit("selection_changed", self)
+    ctx.emitter:emit("selection_changed", self)
   end
 end
 
@@ -1080,7 +1081,7 @@ function DiffView:init_event_listeners()
 
   -- Forward to global emitter so the User autocmd bridge can pick it up.
   self.emitter:on(EventName.FILES_STAGED, function(_, view)
-    DiffviewGlobal.emitter:emit("files_staged", view)
+    ctx.emitter:emit("files_staged", view)
   end)
 end
 

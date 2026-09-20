@@ -22,7 +22,7 @@ local vcs_utils = require("diffview.vcs.utils")
 local api = vim.api
 local await, pawait = async.await, async.pawait
 local fmt = string.format
-local logger = DiffviewGlobal.logger
+local logger = require("diffview.runtime.context").logger
 local pl = lazy.access(utils, "path") --[[@as PathLib ]]
 local uv = vim.uv
 

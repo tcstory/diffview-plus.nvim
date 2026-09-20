@@ -13,6 +13,7 @@ local await = async.await
 local fmt = string.format
 local pl = lazy.access(utils, "path") --[[@as PathLib ]]
 
+local ctx = require("diffview.runtime.context") ---@module "diffview.runtime.context"
 local api = vim.api
 local M = {}
 
@@ -160,10 +161,13 @@ function File:post_buf_created()
   local view = require("diffview.lib").get_current_view()
 
   if view then
-    view.emitter:on("diff_buf_win_enter", function(_, bufnr, winid, ctx)
+    -- `win_ctx` is the window-context argument passed by the emitter, not the
+    -- module-level runtime context (renamed to avoid the shadowing that caused
+    -- ctx.emitter:emit to dereference the wrong object after Phase 2 migration).
+    view.emitter:on("diff_buf_win_enter", function(_, bufnr, winid, win_ctx)
       if bufnr == self.bufnr then
         api.nvim_win_call(winid, function()
-          DiffviewGlobal.emitter:emit("diff_buf_read", self.bufnr, ctx)
+          ctx.emitter:emit("diff_buf_read", self.bufnr, win_ctx)
         end)
 
         return true

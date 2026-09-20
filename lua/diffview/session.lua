@@ -11,6 +11,7 @@
 -- still runs but save and restore are skipped.
 
 local api = vim.api
+local ctx = require("diffview.runtime.context") ---@module "diffview.runtime.context"
 
 local M = {}
 
@@ -328,13 +329,13 @@ function M.save()
   })
   local tmp = path .. ".tmp"
   if vim.fn.writefile({ payload }, tmp) ~= 0 then
-    DiffviewGlobal.logger:warn(("[session] failed to write sidecar at %q"):format(tmp))
+    ctx.logger:warn(("[session] failed to write sidecar at %q"):format(tmp))
     pcall(vim.fn.delete, tmp)
     return
   end
   local rename_ok, rename_err = vim.uv.fs_rename(tmp, path)
   if not rename_ok then
-    DiffviewGlobal.logger:warn(
+    ctx.logger:warn(
       ("[session] failed to rename sidecar %q -> %q: %s"):format(tmp, path, tostring(rename_err))
     )
     pcall(vim.fn.delete, tmp)

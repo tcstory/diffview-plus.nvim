@@ -8,7 +8,7 @@ local utils = lazy.require("diffview.utils") ---@module "diffview.utils"
 
 local await = async.await
 local fmt = string.format
-local logger = DiffviewGlobal.logger
+local logger = require("diffview.runtime.context").logger
 local uv = vim.uv
 
 local M = {}

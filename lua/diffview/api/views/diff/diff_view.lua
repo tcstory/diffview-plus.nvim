@@ -13,7 +13,7 @@ local vcs_utils = lazy.require("diffview.vcs") ---@module "diffview.vcs"
 local oop = lazy.require("diffview.oop") ---@module "diffview.oop"
 local utils = lazy.require("diffview.utils") ---@module "diffview.utils"
 
-local logger = DiffviewGlobal.logger
+local logger = require("diffview.runtime.context").logger
 
 local M = {}
 

@@ -14,7 +14,8 @@ local utils = lazy.require("diffview.utils") ---@module "diffview.utils"
 local api = vim.api
 local await, pawait = async.await, async.pawait
 local fmt = string.format
-local logger = DiffviewGlobal.logger
+local ctx = require("diffview.runtime.context") ---@module "diffview.runtime.context"
+local logger = ctx.logger
 
 local M = {}
 
@@ -264,7 +265,7 @@ Window.open_file = async.void(function(self)
   self.emitter:emit("post_open")
 
   api.nvim_win_call(self.id, function()
-    DiffviewGlobal.emitter:emit("diff_buf_win_enter", self.file.bufnr, self.id, {
+    ctx.emitter:emit("diff_buf_win_enter", self.file.bufnr, self.id, {
       symbol = self.file.symbol,
       layout_name = self.parent.name,
     })

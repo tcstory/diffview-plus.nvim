@@ -23,7 +23,7 @@ local vcs_utils = require("diffview.vcs.utils")
 local api = vim.api
 local await, pawait = async.await, async.pawait
 local fmt = string.format
-local logger = DiffviewGlobal.logger
+local logger = require("diffview.runtime.context").logger
 local pl = lazy.access(utils, "path") --[[@as PathLib ]]
 -- :h vim.uv — vim.loop is a deprecated alias; use vim.uv in Neovim 0.12+.
 local uv = vim.uv

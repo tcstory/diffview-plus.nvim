@@ -13,7 +13,8 @@ local utils = lazy.require("diffview.utils") ---@module "diffview.utils"
 local vcs = lazy.require("diffview.vcs") ---@module "diffview.vcs"
 
 local api = vim.api
-local logger = DiffviewGlobal.logger
+local ctx = require("diffview.runtime.context") ---@module "diffview.runtime.context"
+local logger = ctx.logger
 local pl = lazy.access(utils, "path") --[[@as PathLib ]]
 
 local M = {}
@@ -110,31 +111,31 @@ function M.init()
   })
 
   -- Set up user autocommand emitters
-  DiffviewGlobal.emitter:on("view_opened", function(_)
+  ctx.emitter:on("view_opened", function(_)
     api.nvim_exec_autocmds("User", { pattern = "DiffviewViewOpened", modeline = false })
   end)
-  DiffviewGlobal.emitter:on("view_closed", function(_)
+  ctx.emitter:on("view_closed", function(_)
     api.nvim_exec_autocmds("User", { pattern = "DiffviewViewClosed", modeline = false })
   end)
-  DiffviewGlobal.emitter:on("view_enter", function(_)
+  ctx.emitter:on("view_enter", function(_)
     api.nvim_exec_autocmds("User", { pattern = "DiffviewViewEnter", modeline = false })
   end)
-  DiffviewGlobal.emitter:on("view_leave", function(_)
+  ctx.emitter:on("view_leave", function(_)
     api.nvim_exec_autocmds("User", { pattern = "DiffviewViewLeave", modeline = false })
   end)
-  DiffviewGlobal.emitter:on("view_post_layout", function(_)
+  ctx.emitter:on("view_post_layout", function(_)
     api.nvim_exec_autocmds("User", { pattern = "DiffviewViewPostLayout", modeline = false })
   end)
-  DiffviewGlobal.emitter:on("diff_buf_read", function(_)
+  ctx.emitter:on("diff_buf_read", function(_)
     api.nvim_exec_autocmds("User", { pattern = "DiffviewDiffBufRead", modeline = false })
   end)
-  DiffviewGlobal.emitter:on("diff_buf_win_enter", function(_)
+  ctx.emitter:on("diff_buf_win_enter", function(_)
     api.nvim_exec_autocmds("User", { pattern = "DiffviewDiffBufWinEnter", modeline = false })
   end)
-  DiffviewGlobal.emitter:on("selection_changed", function(_)
+  ctx.emitter:on("selection_changed", function(_)
     api.nvim_exec_autocmds("User", { pattern = "DiffviewSelectionChanged", modeline = false })
   end)
-  DiffviewGlobal.emitter:on("files_staged", function(_)
+  ctx.emitter:on("files_staged", function(_)
     api.nvim_exec_autocmds("User", { pattern = "DiffviewFilesStaged", modeline = false })
   end)
 
@@ -351,7 +352,7 @@ local function _emit(no_recursion, event_name, ...)
     local fn = no_recursion and that.nore_emit or that.emit
     fn(that, event_name, ...)
 
-    that = DiffviewGlobal.emitter
+    that = ctx.emitter
     fn = no_recursion and that.nore_emit or that.emit
 
     if event_name == "tab_enter" then

@@ -4,7 +4,7 @@ local hl = require("diffview.hl")
 local utils = require("diffview.utils")
 
 local fmt = string.format
-local logger = DiffviewGlobal.logger
+local logger = require("diffview.runtime.context").logger
 local perf = PerfTimer("[FileHistoryPanel] Render internal")
 local pl = utils.path
 

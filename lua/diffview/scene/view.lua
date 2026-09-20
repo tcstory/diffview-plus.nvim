@@ -13,6 +13,7 @@ local config = lazy.require("diffview.config") ---@module "diffview.config"
 local oop = lazy.require("diffview.oop") ---@module "diffview.oop"
 local utils = lazy.require("diffview.utils") ---@module "diffview.utils"
 
+local ctx = require("diffview.runtime.context") ---@module "diffview.runtime.context"
 local api = vim.api
 local M = {}
 
@@ -162,7 +163,7 @@ function View:init(opt)
     end
 
     self._global_callbacks[event] = cb
-    DiffviewGlobal.emitter:on(event, cb)
+    ctx.emitter:on(event, cb)
   end
 
   wrap_event("view_closed")
@@ -195,8 +196,8 @@ function View:open()
   self:init_layout()
   self:post_open()
   apply_diffopt(self)
-  DiffviewGlobal.emitter:emit("view_opened", self)
-  DiffviewGlobal.emitter:emit("view_enter", self)
+  ctx.emitter:emit("view_opened", self)
+  ctx.emitter:emit("view_enter", self)
   -- No wait guard here: `init_layout` synchronously drops `File.NULL_FILE`
   -- into every diffview window, and `_get_null_buffer` installs buffer-local
   -- `<Nop>` mappings for `do`/`dp`/`[1-3]do`. Typeahead landing on the
@@ -211,7 +212,7 @@ function View:close(opts)
   self.closing:send()
 
   if self.tabpage and api.nvim_tabpage_is_valid(self.tabpage) then
-    DiffviewGlobal.emitter:emit("view_leave", self)
+    ctx.emitter:emit("view_leave", self)
     restore_diffopt(self)
 
     if #api.nvim_list_tabpages() == 1 then
@@ -225,11 +226,11 @@ function View:close(opts)
     end
   end
 
-  DiffviewGlobal.emitter:emit("view_closed", self)
+  ctx.emitter:emit("view_closed", self)
 
   -- Unsubscribe all global listeners to prevent leaked references.
   for event, cb in pairs(self._global_callbacks) do
-    DiffviewGlobal.emitter:off(cb, event)
+    ctx.emitter:off(cb, event)
   end
 
   self._global_callbacks = {}

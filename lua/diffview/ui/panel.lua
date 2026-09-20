@@ -6,7 +6,7 @@ local renderer = require("diffview.renderer")
 local utils = require("diffview.utils")
 
 local api = vim.api
-local logger = DiffviewGlobal.logger
+local logger = require("diffview.runtime.context").logger
 local pl = utils.path
 
 local M = {}

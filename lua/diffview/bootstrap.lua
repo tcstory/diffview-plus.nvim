@@ -50,4 +50,13 @@ DiffviewGlobal.emitter:on_any(function(e, args)
   config.user_emitter:nore_emit(e.id, utils.tbl_unpack(args))
 end)
 
+-- Phase 2: also initialise the module-level context so new code can use
+-- `require("diffview.runtime.context").logger` instead of the _G global.
+-- Both access paths are equivalent during the transition; the _G.DiffviewGlobal
+-- global will be removed once all 58 call sites have been migrated.
+require("diffview.runtime.context").init(
+  DiffviewGlobal.logger,
+  DiffviewGlobal.emitter
+)
+
 return true

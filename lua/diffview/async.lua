@@ -20,10 +20,14 @@ M._handles = {}
 ---@alias AsyncKind "callback"|"void"
 
 local function dstring(object)
-  if not DiffviewGlobal.logger then
+  -- Use context.is_ready() to check whether bootstrap has completed.
+  -- `async.lua` is loaded before bootstrap finishes, so DiffviewGlobal.logger
+  -- may not exist yet at module-load time.
+  local ctx = require("diffview.runtime.context")
+  if not ctx.is_ready() then
     return ""
   end
-  dstring = DiffviewGlobal.logger.dstring
+  dstring = ctx.logger.dstring
   return dstring(object)
 end
 
@@ -155,7 +159,8 @@ end
 ---@package
 ---@param ... any
 function Future:dprint(...)
-  if not DiffviewGlobal.logger then
+  local ctx = require("diffview.runtime.context")
+  if not ctx.is_ready() then
     return
   end
   if DiffviewGlobal.debug_level >= 10 or M._watching[self] then
@@ -163,7 +168,7 @@ function Future:dprint(...)
     for i = 1, table.maxn(t) do
       t[i] = dstring(t[i])
     end
-    DiffviewGlobal.logger:debug(table.concat(t, " "))
+    ctx.logger:debug(table.concat(t, " "))
   end
 end
 

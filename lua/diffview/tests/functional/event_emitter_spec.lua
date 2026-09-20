@@ -101,14 +101,24 @@ describe("diffview.events", function()
 
     -- Swap in a fresh global emitter so tests are isolated. Using
     -- before_each/after_each ensures restoration even if assertions fail.
+    --
+    -- Phase 2 note: view.lua now uses ctx.emitter (from runtime/context)
+    -- rather than DiffviewGlobal.emitter directly.  We must swap the
+    -- ctx.emitter field so the mock is visible to view.lua's code.
+    local ctx = require("diffview.runtime.context")
     local orig_emitter
 
     before_each(function()
-      orig_emitter = DiffviewGlobal.emitter
-      DiffviewGlobal.emitter = EventEmitter()
+      orig_emitter = ctx.emitter
+      local fresh = EventEmitter()
+      -- Keep both access paths in sync so test assertions on
+      -- DiffviewGlobal.emitter and view.lua's ctx.emitter see the same object.
+      ctx.emitter = fresh
+      DiffviewGlobal.emitter = fresh
     end)
 
     after_each(function()
+      ctx.emitter = orig_emitter
       DiffviewGlobal.emitter = orig_emitter
     end)
 

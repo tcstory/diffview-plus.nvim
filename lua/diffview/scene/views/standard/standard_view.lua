@@ -12,6 +12,7 @@ local config = lazy.require("diffview.config") ---@module "diffview.config"
 local oop = lazy.require("diffview.oop") ---@module "diffview.oop"
 local utils = lazy.require("diffview.utils") ---@module "diffview.utils"
 
+local ctx = require("diffview.runtime.context") ---@module "diffview.runtime.context"
 local api = vim.api
 local await, pawait = async.await, async.pawait
 
@@ -394,7 +395,7 @@ function StandardView:post_layout()
     }
   end
 
-  DiffviewGlobal.emitter:emit("view_post_layout", self)
+  ctx.emitter:emit("view_post_layout", self)
 end
 
 ---@override
@@ -694,7 +695,7 @@ StandardView._drain_set_file_pending = async.void(function(self)
 
     if not self.cur_entry.opened then
       self.cur_entry.opened = true
-      DiffviewGlobal.emitter:emit("file_open_new", target)
+      ctx.emitter:emit("file_open_new", target)
     end
   end
   self._set_file_in_flight = nil

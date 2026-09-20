@@ -1,7 +1,7 @@
 local lazy = require("diffview.lazy")
 local config = lazy.require("diffview.config") ---@module "diffview.config"
 
-local logger = DiffviewGlobal.logger
+local logger = require("diffview.runtime.context").logger
 
 local M = {}
 
