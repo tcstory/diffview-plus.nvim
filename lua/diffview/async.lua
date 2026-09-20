@@ -163,7 +163,7 @@ function Future:dprint(...)
   if not ctx.is_ready() then
     return
   end
-  if DiffviewGlobal.debug_level >= 10 or M._watching[self] then
+  if require("diffview.runtime.context").debug_level >= 10 or M._watching[self] then
     local t = { self, "::", ... }
     for i = 1, table.maxn(t) do
       t[i] = dstring(t[i])

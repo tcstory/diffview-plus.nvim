@@ -1244,7 +1244,7 @@ end
 function M.input(prompt, opt)
   local completion = opt.completion
   if type(completion) == "function" then
-    DiffviewGlobal.state.current_completer = completion
+    require("diffview.runtime.context").state.current_completer = completion
     completion = "customlist,Diffview__ui_input_completion"
   end
 

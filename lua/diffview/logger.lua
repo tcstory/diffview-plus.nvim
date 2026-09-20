@@ -13,6 +13,14 @@ local fmt = string.format
 local pl = lazy.access(utils, "path") --[[@as PathLib ]]
 local uv = vim.uv
 
+-- Phase 2B: lazy accessor for the module-level runtime context.
+-- Using a function avoids a module-load-time circular require:
+--   logger.lua is loaded by async.lua which loads before bootstrap.lua.
+-- After bootstrap completes, `_ctx()` returns the fully-initialised context.
+local function _ctx()
+  return require("diffview.runtime.context")
+end
+
 local M = {}
 
 ---@class Logger.TimeOfDay
@@ -122,7 +130,7 @@ function Logger:init(opt)
   self.plugin = opt.plugin or "diffview"
   self.outfile = opt.outfile or fmt("%s/%s.log", vim.fn.stdpath("cache"), self.plugin)
   self.outfile_status = Logger.OutfileStatus.UNKNOWN
-  self.level = DiffviewGlobal.debug_level > 0 and Logger.LogLevels.debug or Logger.LogLevels.info
+  self.level = _ctx().debug_level > 0 and Logger.LogLevels.debug or Logger.LogLevels.info
   self.msg_buffer = {}
   self.msg_sem = Semaphore(1)
   self.batch_interval = opt.batch_interval or 3000
@@ -317,7 +325,7 @@ end)
 ---@param min_level integer
 ---@return Logger
 function Logger:lvl(min_level)
-  if DiffviewGlobal.debug_level >= min_level then
+  if _ctx().debug_level >= min_level then
     return self
   end
 
@@ -383,7 +391,7 @@ function Logger:log_job(job, opt)
   if opt.silent then
     return
   end
-  if opt.debug_level and DiffviewGlobal.debug_level < opt.debug_level then
+  if opt.debug_level and _ctx().debug_level < opt.debug_level then
     return
   end
 

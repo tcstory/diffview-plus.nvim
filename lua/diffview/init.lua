@@ -142,7 +142,7 @@ function M.init()
   -- Set up completion wrapper used by `vim.ui.input()`
   vim.cmd([[
     function! Diffview__ui_input_completion(...) abort
-      return luaeval("DiffviewGlobal.state.current_completer(
+      return luaeval("require("diffview.runtime.context").state.current_completer(
             \ unpack(vim.fn.eval('a:000')))")
     endfunction
   ]])

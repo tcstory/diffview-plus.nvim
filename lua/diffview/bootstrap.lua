@@ -53,10 +53,12 @@ end)
 -- Phase 2: also initialise the module-level context so new code can use
 -- `require("diffview.runtime.context").logger` instead of the _G global.
 -- Both access paths are equivalent during the transition; the _G.DiffviewGlobal
--- global will be removed once all 58 call sites have been migrated.
-require("diffview.runtime.context").init(
-  DiffviewGlobal.logger,
-  DiffviewGlobal.emitter
-)
+-- global will be removed once all call sites have been migrated.
+require("diffview.runtime.context").init({
+  logger      = DiffviewGlobal.logger,
+  emitter     = DiffviewGlobal.emitter,
+  debug_level = DiffviewGlobal.debug_level,
+  state       = DiffviewGlobal.state,
+})
 
 return true
