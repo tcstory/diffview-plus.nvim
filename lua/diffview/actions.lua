@@ -1344,4 +1344,110 @@ for _, name in ipairs(action_names) do
   end
 end
 
+-- ---------------------------------------------------------------------------
+-- Phase 3: ActionRegistry — register every action from M.* into the registry.
+--
+-- This makes all actions discoverable through one stable API:
+--   require("diffview.runtime.action_registry").list()
+--   require("diffview.runtime.action_registry").execute("navigation.next_entry")
+--
+-- The M.* functions are kept as thin wrappers so existing config/keymaps
+-- continue to work unchanged during the transition.
+--
+-- Categories follow the registry's ActionCategory enum:
+--   diff | history | merge | navigation | layout | file | view
+--
+-- Action IDs use the pattern "<category>.<snake_case_name>".
+-- ---------------------------------------------------------------------------
+do
+  local registry = require("diffview.runtime.action_registry")
+  local AC = registry.ActionCategory
+
+  ---Helper: register an action whose execute is the corresponding M.* function.
+  ---`available_fn` is optional; omit for unconditionally-available actions.
+  ---@param id string
+  ---@param label string
+  ---@param desc string
+  ---@param category string
+  ---@param fn_name string
+  ---@param available_fn? fun(view: any): boolean
+  local function reg(id, label, desc, category, fn_name, available_fn)
+    registry.register({
+      id        = id,
+      label     = label,
+      desc      = desc,
+      category  = category,
+      available = available_fn,
+      execute   = function(...) return M[fn_name](...) end,
+    })
+  end
+
+  -- Navigation ---------------------------------------------------------------
+  reg("navigation.next_entry",          "Next entry",           "Move to the next file entry.",                           AC.NAVIGATION, "next_entry")
+  reg("navigation.prev_entry",          "Prev entry",           "Move to the previous file entry.",                       AC.NAVIGATION, "prev_entry")
+  reg("navigation.next_entry_in_commit","Next entry in commit", "Move to the next file entry within the same commit.",    AC.NAVIGATION, "next_entry_in_commit")
+  reg("navigation.prev_entry_in_commit","Prev entry in commit", "Move to the previous file entry within the same commit.",AC.NAVIGATION, "prev_entry_in_commit")
+  reg("navigation.select_entry",        "Select entry",         "Select the focused file entry.",                         AC.NAVIGATION, "select_entry")
+  reg("navigation.select_next_entry",   "Select next entry",    "Select the next file entry.",                            AC.NAVIGATION, "select_next_entry")
+  reg("navigation.select_prev_entry",   "Select prev entry",    "Select the previous file entry.",                        AC.NAVIGATION, "select_prev_entry")
+  reg("navigation.select_first_entry",  "Select first entry",   "Select the first file entry.",                           AC.NAVIGATION, "select_first_entry")
+  reg("navigation.select_last_entry",   "Select last entry",    "Select the last file entry.",                            AC.NAVIGATION, "select_last_entry")
+  reg("navigation.select_next_commit",  "Select next commit",   "Select the next commit in the history list.",            AC.NAVIGATION, "select_next_commit")
+  reg("navigation.select_prev_commit",  "Select prev commit",   "Select the previous commit in the history list.",        AC.NAVIGATION, "select_prev_commit")
+  reg("navigation.focus_entry",         "Focus entry",          "Focus the selected file entry in the diff view.",        AC.NAVIGATION, "focus_entry")
+  reg("navigation.focus_files",         "Focus files panel",    "Focus the file panel.",                                  AC.NAVIGATION, "focus_files")
+  reg("navigation.next_conflict",       "Next conflict",        "Jump to the next merge conflict hunk.",                  AC.NAVIGATION, "next_conflict")
+  reg("navigation.prev_conflict",       "Prev conflict",        "Jump to the previous merge conflict hunk.",              AC.NAVIGATION, "prev_conflict")
+  reg("navigation.next_inline_hunk",    "Next inline hunk",     "Jump to the next inline diff hunk.",                     AC.NAVIGATION, "next_inline_hunk")
+  reg("navigation.prev_inline_hunk",    "Prev inline hunk",     "Jump to the previous inline diff hunk.",                 AC.NAVIGATION, "prev_inline_hunk")
+
+  -- File ---------------------------------------------------------------------
+  reg("file.goto_file",             "Go to file",             "Open the current file under cursor.",                      AC.FILE, "goto_file")
+  reg("file.goto_file_edit",        "Edit file",              "Open the current file for editing.",                       AC.FILE, "goto_file_edit")
+  reg("file.goto_file_edit_close",  "Edit file and close",    "Open the current file for editing and close the view.",    AC.FILE, "goto_file_edit_close")
+  reg("file.goto_file_split",       "Open in split",          "Open the current file in a horizontal split.",             AC.FILE, "goto_file_split")
+  reg("file.goto_file_tab",         "Open in tab",            "Open the current file in a new tab.",                      AC.FILE, "goto_file_tab")
+  reg("file.open_file_external",    "Open externally",        "Open the current file with the system default app.",       AC.FILE, "open_file_external")
+  reg("file.open_in_new_tab",       "Open in new tab",        "Open the diff entry in a new tab.",                       AC.FILE, "open_in_new_tab")
+  reg("file.open_in_diffview",      "Open in DiffView",       "Open the selected file in a new DiffView.",               AC.FILE, "open_in_diffview")
+  reg("file.open_commit_in_browser","Open commit in browser", "Open the selected commit in the browser.",                 AC.FILE, "open_commit_in_browser")
+  reg("file.open_commit_log",       "Open commit log",        "Show the log for the selected commit.",                    AC.FILE, "open_commit_log")
+  reg("file.open_commit_log_file",  "Open commit log file",   "Show the log for the current file at the selected commit.",AC.FILE, "open_commit_log_file")
+  reg("file.restore_entry",         "Restore entry",          "Restore the current file to its state at the revision.",   AC.FILE, "restore_entry")
+  reg("file.copy_hash",             "Copy hash",              "Copy the selected commit hash to the clipboard.",           AC.FILE, "copy_hash")
+  reg("file.refresh_files",         "Refresh files",          "Re-scan the VCS status and refresh the file list.",        AC.FILE, "refresh_files")
+  reg("file.toggle_untracked",      "Toggle untracked",       "Toggle showing untracked files.",                          AC.FILE, "toggle_untracked")
+  reg("file.toggle_flatten_dirs",   "Toggle flatten dirs",    "Toggle flattening single-child directories.",              AC.FILE, "toggle_flatten_dirs")
+  reg("file.listing_style",         "Listing style",          "Cycle through file listing styles (flat / tree).",         AC.FILE, "listing_style")
+
+  -- Diff / index -------------------------------------------------------------
+  reg("diff.diff_against_default_branch", "Diff vs default branch","Open a diff against the default branch.",            AC.DIFF, "diff_against_default_branch")
+  reg("diff.diff_against_head",           "Diff vs HEAD",           "Open a diff against HEAD.",                         AC.DIFF, "diff_against_head")
+  reg("diff.diffget_inline",              "Diffget inline",         "Revert the current inline diff hunk.",              AC.DIFF, "diffget_inline")
+  reg("diff.stage_all",                   "Stage all",              "Stage all unstaged changes.",                        AC.DIFF, "stage_all",   function(v) return M._is_applicable(M.stage_all, v) end)
+  reg("diff.unstage_all",                 "Unstage all",            "Unstage all staged changes.",                        AC.DIFF, "unstage_all", function(v) return M._is_applicable(M.unstage_all, v) end)
+  reg("diff.toggle_stage_entry",          "Toggle stage entry",     "Stage or unstage the focused entry.",                AC.DIFF, "toggle_stage_entry", function(v) return M._is_applicable(M.toggle_stage_entry, v) end)
+  reg("diff.toggle_select_entry",         "Toggle select entry",    "Toggle selection on the focused entry.",             AC.DIFF, "toggle_select_entry")
+  reg("diff.clear_select_entries",        "Clear selection",        "Clear all selected entries.",                        AC.DIFF, "clear_select_entries")
+  reg("diff.toggle_hide_selected",        "Toggle hide selected",   "Toggle hiding selected entries from the file list.", AC.DIFF, "toggle_hide_selected")
+
+  -- Merge --------------------------------------------------------------------
+  reg("merge.merge_mark_resolved",  "Mark resolved",          "Mark the current conflict file as resolved.",              AC.MERGE, "merge_mark_resolved")
+  reg("merge.merge_apply",          "Apply merge",            "Apply the chosen conflict resolution.",                   AC.MERGE, "merge_apply")
+
+  -- Layout -------------------------------------------------------------------
+  reg("layout.cycle_layout",   "Cycle layout",   "Cycle through available diff layouts.",         AC.LAYOUT, "cycle_layout")
+  reg("layout.toggle_files",   "Toggle files",   "Toggle the visibility of the file panel.",      AC.LAYOUT, "toggle_files")
+  reg("layout.options",        "Options",        "Open the diffview options panel.",              AC.LAYOUT, "options")
+  reg("layout.scroll_view",    "Scroll view",    "Scroll the diff view by a fixed amount.",       AC.LAYOUT, "scroll_view")
+
+  -- View / fold --------------------------------------------------------------
+  reg("view.close",            "Close",          "Close the current diffview.",                   AC.VIEW, "close")
+  reg("view.open_all_folds",   "Open all folds", "Open all folds in the file panel.",             AC.VIEW, "open_all_folds")
+  reg("view.close_all_folds",  "Close all folds","Close all folds in the file panel.",            AC.VIEW, "close_all_folds")
+  reg("view.open_fold",        "Open fold",      "Open the fold under the cursor.",               AC.VIEW, "open_fold")
+  reg("view.close_fold",       "Close fold",     "Close the fold under the cursor.",              AC.VIEW, "close_fold")
+  reg("view.toggle_fold",      "Toggle fold",    "Toggle the fold under the cursor.",             AC.VIEW, "toggle_fold")
+end
+
 return M
