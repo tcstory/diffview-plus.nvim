@@ -177,6 +177,12 @@ function M.availability(id, view)
   if not spec then
     return false, "Unknown action"
   end
+  if view and view.shell and type(view.shell.can_execute) == "function" then
+    local available, reason = view.shell:can_execute()
+    if not available then
+      return false, reason
+    end
+  end
   if spec.available then
     local available, reason = spec.available(view)
     return available, reason or (available and nil or "Unavailable in this context")

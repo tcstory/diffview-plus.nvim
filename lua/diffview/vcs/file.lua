@@ -8,6 +8,7 @@ local Signal = lazy.access("diffview.control", "Signal") ---@type Signal|LazyMod
 local config = lazy.require("diffview.config") ---@module "diffview.config"
 local lib = lazy.require("diffview.lib") ---@module "diffview.lib"
 local utils = lazy.require("diffview.utils") ---@module "diffview.utils"
+local BufferLease = require("diffview.ui.buffer_lease")
 
 local await = async.await
 local fmt = string.format
@@ -555,51 +556,7 @@ end
 ---@field keymaps? table
 ---@field saved_keymaps table<string, table> Original buffer keymaps saved before overwriting.
 ---@field disable_diagnostics boolean
-
----Save any existing buffer-local keymap for the given mode and lhs before
----diffview overwrites it, so we can restore it on detach.
----@param bufnr integer
----@param saved table<string, table>
----@param mode_map_cache table<string, table>
----@param mode string
----@param lhs string
-local function save_existing_keymap(bufnr, saved, mode_map_cache, mode, lhs)
-  local key = mode .. " " .. lhs
-  if saved[key] then
-    return
-  end
-
-  local mode_cache = mode_map_cache[mode]
-  if not mode_cache then
-    mode_cache = {}
-    for _, km in ipairs(api.nvim_buf_get_keymap(bufnr, mode)) do
-      if km.lhs and mode_cache[km.lhs] == nil then
-        mode_cache[km.lhs] = km
-      end
-    end
-    mode_map_cache[mode] = mode_cache
-  end
-
-  local km = mode_cache[lhs]
-  if not km then
-    return
-  end
-
-  saved[key] = {
-    mode = mode,
-    lhs = lhs,
-    rhs = km.rhs or "",
-    callback = km.callback,
-    opts = {
-      buffer = bufnr,
-      desc = km.desc,
-      silent = km.silent == 1 or km.silent == true,
-      noremap = km.noremap == 1 or km.noremap == true,
-      nowait = km.nowait == 1 or km.nowait == true,
-      expr = km.expr == 1 or km.expr == true,
-    },
-  }
-end
+---@field lease? diffview.BufferLease
 
 ---@param force? boolean
 ---@param opt? vcs.File.AttachState
@@ -619,28 +576,20 @@ function File:attach_buffer(force, opt)
       -- Keymaps
       state.keymaps = config.extend_keymaps(conf.keymaps.view, state.keymaps)
       state.saved_keymaps = state.saved_keymaps or {}
+      local lease = state.lease or BufferLease.new(self.bufnr, state.saved_keymaps)
+      state.lease = lease
+      state.saved_keymaps = lease.saved_keymaps
       local default_map_opt = { silent = true, nowait = true, buffer = self.bufnr }
-      local existing_maps_by_mode = {}
 
       for _, mapping in ipairs(state.keymaps) do
-        local modes = type(mapping[1]) == "table" and mapping[1] or { mapping[1] }
-        for _, mode in ipairs(modes) do
-          save_existing_keymap(
-            self.bufnr,
-            state.saved_keymaps,
-            existing_maps_by_mode,
-            mode,
-            mapping[2]
-          )
-        end
         local map_opt =
           vim.tbl_extend("force", default_map_opt, mapping[4] or {}, { buffer = self.bufnr })
-        vim.keymap.set(mapping[1], mapping[2], mapping[3], map_opt)
+        lease:set_keymap(mapping[1], mapping[2], mapping[3], map_opt)
       end
 
       -- Diagnostics
       if state.disable_diagnostics then
-        vim.diagnostic.enable(false, { bufnr = self.bufnr })
+        lease:disable_diagnostics()
       end
 
       -- Inlay hints: Always disable for non-LOCAL buffers to prevent
@@ -648,7 +597,7 @@ function File:attach_buffer(force, opt)
       -- computed for the current file version, which may differ from the
       -- revision shown in the diff buffer.
       if self.rev and self.rev.type ~= RevType.LOCAL then
-        pcall(vim.lsp.inlay_hint.enable, false, { bufnr = self.bufnr })
+        lease:disable_inlay_hints()
       end
 
       File.attached[self.bufnr] = state
@@ -687,36 +636,8 @@ function File:detach_buffer()
     local state = File.attached[self.bufnr]
 
     if state then
-      -- Keymaps: remove diffview's mappings.
-      for lhs, mapping in pairs(state.keymaps) do
-        if type(lhs) == "number" then
-          local modes = type(mapping[1]) == "table" and mapping[1] or { mapping[1] }
-          for _, mode in ipairs(modes) do
-            pcall(api.nvim_buf_del_keymap, self.bufnr, mode, mapping[2])
-          end
-        else
-          pcall(api.nvim_buf_del_keymap, self.bufnr, "n", lhs)
-        end
-      end
-
-      -- Restore original buffer keymaps that were saved before attach.
-      if state.saved_keymaps then
-        for _, km in pairs(state.saved_keymaps) do
-          local rhs = km.callback or km.rhs
-          if rhs and api.nvim_buf_is_valid(self.bufnr) then
-            pcall(vim.keymap.set, km.mode, km.lhs, rhs, km.opts)
-          end
-        end
-      end
-
-      -- Diagnostics
-      if state.disable_diagnostics then
-        vim.diagnostic.enable(true, { bufnr = self.bufnr })
-      end
-
-      -- Re-enable inlay hints for non-LOCAL buffers (if they were disabled).
-      if self.rev and self.rev.type ~= RevType.LOCAL then
-        pcall(vim.lsp.inlay_hint.enable, true, { bufnr = self.bufnr })
+      if state.lease then
+        state.lease:release()
       end
 
       File.attached[self.bufnr] = nil
@@ -748,25 +669,6 @@ function File.safe_delete_buf(bufnr)
   end
 
   pcall(api.nvim_buf_delete, bufnr, { force = true })
-end
-
--- Vim built-in diff keys that need to be swallowed while the null placeholder
--- is visible. Diff2 layouts use `do`/`dp`; Diff3/Diff4 layers `[1-3]do` on top
--- via the layout keymaps. Guarding them all keeps typeahead like `2do` from
--- resolving to native `:diffget` on an empty buffer between `init_layout` and
--- the first real `set_file` (see #262).
-local NULL_GUARD_KEYS = { "do", "dp", "1do", "2do", "3do" }
-
----@param bufnr integer
-local function install_null_buffer_guards(bufnr)
-  for _, lhs in ipairs(NULL_GUARD_KEYS) do
-    vim.keymap.set({ "n", "x" }, lhs, "<Nop>", {
-      buffer = bufnr,
-      nowait = true,
-      silent = true,
-      desc = "diffview: swallow typeahead on the null placeholder",
-    })
-  end
 end
 
 ---@static Get the bufid of the null buffer. Create it if it's not loaded.
@@ -801,11 +703,6 @@ function File._get_null_buffer()
 
     File.NULL_FILE.bufnr = bn
   end
-
-  -- Re-install on every call so an adopted buffer whose earlier session was
-  -- torn down (and whose buffer-local maps went with it) still ends up
-  -- guarded. `vim.keymap.set` is idempotent for the same `{ mode, lhs, opts }`.
-  install_null_buffer_guards(File.NULL_FILE.bufnr)
 
   return File.NULL_FILE.bufnr
 end

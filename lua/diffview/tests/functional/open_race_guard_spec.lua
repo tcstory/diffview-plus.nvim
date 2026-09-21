@@ -1,9 +1,6 @@
--- Regression: typeahead after `:DiffviewOpen` on a conflict must not fall
--- through to native `:diffget` (E99/E101). The invariant is now provided by
--- `File._get_null_buffer` installing buffer-local `<Nop>` mappings on the
--- shared null placeholder, which `init_layout` puts into every diffview
--- window synchronously before `View:open` returns (see #262). The prompt-
--- return case (#289) drops out for free: `View:open` no longer waits.
+-- Regression coverage for the asynchronous open path. Phase 5 removes
+-- domain-specific `<Nop>` guards from the shared placeholder; registered
+-- actions are gated centrally by ViewShell until the view reports ready.
 local config = require("diffview.config")
 local helpers = require("diffview.tests.helpers")
 
@@ -60,21 +57,14 @@ local function make_conflict_repo()
   return repo
 end
 
-describe("null-placeholder typeahead guard (issue #262)", function()
-  it("shadows the built-in diff keys with `<Nop>` on the shared null buffer", function()
+describe("null placeholder ownership", function()
+  it("does not inject domain key guards into the shared null buffer", function()
     local bn = File._get_null_buffer()
     assert.is_true(vim.api.nvim_buf_is_loaded(bn))
 
     for _, lhs in ipairs({ "do", "dp", "1do", "2do", "3do" }) do
       local rhs = buf_nmap_rhs(bn, lhs)
-      assert.are.equal(
-        "",
-        rhs,
-        ("buffer-local mapping for %q on the null buffer should be `<Nop>` (empty rhs), got %s"):format(
-          lhs,
-          vim.inspect(rhs)
-        )
-      )
+      assert.is_nil(rhs, ("unexpected null-buffer mapping for %q"):format(lhs))
     end
   end)
 end)
@@ -92,47 +82,6 @@ describe("DiffView:open (issue #262 / #289)", function()
   after_each(function()
     DiffviewGlobal.emitter = orig_emitter
     config.setup(original_config)
-  end)
-
-  it("guards `do` on every diff-layout window's buffer before returning", function()
-    local repo = make_conflict_repo()
-    local view
-
-    local ok, err = pcall(function()
-      view = DiffView({
-        adapter = GitAdapter({ toplevel = repo, cpath = repo, path_args = {} }),
-        rev_arg = nil,
-        path_args = {},
-        left = GitRev(RevType.STAGE, 0),
-        right = GitRev(RevType.LOCAL),
-        options = {},
-      })
-      view:open()
-
-      -- The invariant that fixes #262: every diff-layout window that
-      -- typeahead could reach must already have `do` mapped away from the
-      -- built-in `:diffget`. `DiffView` focuses the file panel after
-      -- `init_layout`, so the *current* window is the panel; the racy
-      -- windows are the layout's diff windows, all still holding
-      -- `File.NULL_FILE`.
-      assert.is_truthy(view.cur_layout)
-      assert.is_true(#view.cur_layout.windows > 0)
-      for _, win in ipairs(view.cur_layout.windows) do
-        assert.is_true(win:is_valid())
-        local bufnr = vim.api.nvim_win_get_buf(win.id)
-        assert.are.equal(
-          "",
-          buf_nmap_rhs(bufnr, "do"),
-          ("layout window %d buffer %d missing `do` guard"):format(win.id, bufnr)
-        )
-      end
-    end)
-
-    helpers.close_view(view)
-    helpers.cleanup_repo(repo)
-    if not ok then
-      error(err)
-    end
   end)
 
   it("returns promptly on a clean worktree", function()

@@ -12,6 +12,7 @@ local Signal = lazy.access("diffview.control", "Signal") ---@type Signal|LazyMod
 local config = lazy.require("diffview.config") ---@module "diffview.config"
 local oop = lazy.require("diffview.oop") ---@module "diffview.oop"
 local utils = lazy.require("diffview.utils") ---@module "diffview.utils"
+local ViewShell = require("diffview.ui.view_shell")
 
 local ctx = require("diffview.runtime.context") ---@module "diffview.runtime.context"
 local api = vim.api
@@ -128,6 +129,7 @@ local LayoutMode = oop.enum({
 ---@field closing Signal
 ---@field _saved_diffopt string[]? Per-view saved diffopt value before overrides.
 ---@field _global_callbacks table<any, function> # Callbacks registered on the global emitter, keyed by event.
+---@field shell diffview.ViewShell
 local View = oop.create_class("View")
 
 ---@diagnostic disable unused-local
@@ -152,6 +154,7 @@ function View:init(opt)
   self.ready = utils.sate(opt.ready, false)
   self.closing = utils.sate(opt.closing, Signal())
   self._global_callbacks = {}
+  self.shell = ViewShell.new(self)
 
   local function wrap_event(event)
     local cb = function(_, view, ...)
@@ -178,6 +181,7 @@ function View:init(opt)
 end
 
 function View:open()
+  self.shell:begin_loading()
   -- Auto-register so that integrating plugins (e.g., Neogit) don't need to
   -- reach into diffview.lib to call add_view().
   require("diffview.lib").add_view(self)
@@ -198,17 +202,13 @@ function View:open()
   apply_diffopt(self)
   ctx.emitter:emit("view_opened", self)
   ctx.emitter:emit("view_enter", self)
-  -- No wait guard here: `init_layout` synchronously drops `File.NULL_FILE`
-  -- into every diffview window, and `_get_null_buffer` installs buffer-local
-  -- `<Nop>` mappings for `do`/`dp`/`[1-3]do`. Typeahead landing on the
-  -- placeholder before the real diff buffer is swapped in can no longer fall
-  -- through to native `:diffget` (see #262).
 end
 
 ---@param opts? diffview.View.CloseOpts # Forwarded to subclass overrides; ignored at the base level.
 ---@return boolean? closed # `false` if a subclass aborted the close.
 ---@diagnostic disable-next-line: unused-local
 function View:close(opts)
+  self.shell:begin_close()
   self.closing:send()
 
   if self.tabpage and api.nvim_tabpage_is_valid(self.tabpage) then
@@ -235,6 +235,7 @@ function View:close(opts)
 
   self._global_callbacks = {}
   self.emitter:clear()
+  self.shell:close()
 end
 
 function View:is_cur_tabpage()

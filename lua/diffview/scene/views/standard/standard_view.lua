@@ -43,6 +43,7 @@ end
 ---@field layouts table<Layout, Layout>
 ---@field no_panel? boolean # Per-view `--no-panel` override. When set, takes precedence over the panel's `show` config (`nil` means defer to config).
 ---@field cursor_map table<string, StandardView.CarryState> # Repo-relative path → the cursor and viewport last seen for that path. Consumed the next time the path opens.
+---@field layout_states table<Layout, Layout.RoundtripState>
 ---@field package _set_file_in_flight Future? # Active `_set_file` worker; queued callers await this so `await(set_file)` returns only after the latest pending file is opened.
 ---@field package _set_file_pending FileEntry? # Newest file queued while `_set_file_in_flight` is set; the worker picks it up before terminating.
 local StandardView = oop.create_class("StandardView", View.__get())
@@ -113,6 +114,7 @@ function StandardView:init(opt)
     }
 
   self.cursor_map = opt.cursor_map or {}
+  self.layout_states = opt.layout_states or {}
 
   -- Snapshot the leaving file's view state on every swap, so mid-navigation
   -- saves keep cursor + viewport for every visited file.
@@ -508,6 +510,7 @@ StandardView.use_entry = async.void(function(self, entry)
   local old_layout = self.cur_layout
   local old_entry = self.cur_entry
   local panel_was_focused = self.panel:is_focused()
+  self.layout_states[old_layout.class] = old_layout:capture_state()
   self.cur_entry = entry
 
   if entry.layout.class == self.cur_layout.class then
@@ -610,6 +613,9 @@ StandardView.use_entry = async.void(function(self, entry)
     end
 
     self:restore_focus_after_layout_swap(panel_was_focused)
+    if not panel_was_focused then
+      new_layout:restore_state(self.layout_states[new_layout.class])
+    end
   end
 end)
 

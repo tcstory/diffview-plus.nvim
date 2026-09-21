@@ -287,10 +287,8 @@ describe("diffview.scene.views.diff.file_merge_view", function()
     end)
   end)
 
-  -- Regression: after `:DiffviewMergeFiles`, every diff-layout window
-  -- must have `do` mapped away from native `:diffget` so typeahead can't
-  -- fall through to E99/E101 (issue #262). The invariant lives on
-  -- `File.NULL_FILE`, which `init_layout` installs synchronously.
+  -- Phase 5 keeps domain mappings off the shared placeholder. Registered
+  -- actions are gated by ViewShell while FileMergeView is loading.
   describe("FileMergeView:open (issue #262)", function()
     local function buf_do_rhs(bufnr)
       for _, m in ipairs(vim.api.nvim_buf_get_keymap(bufnr, "n")) do
@@ -301,7 +299,7 @@ describe("diffview.scene.views.diff.file_merge_view", function()
       return nil
     end
 
-    it("guards `do` on every diff-layout window before returning", function()
+    it("does not add a `do` guard to diff-layout placeholders", function()
       local output = tmpfile("<<<<<<< HEAD\nc\n=======\ne\n>>>>>>> what\n")
       local base = tmpfile("a\n")
       local left = tmpfile("c\n")
@@ -316,7 +314,7 @@ describe("diffview.scene.views.diff.file_merge_view", function()
       for _, win in ipairs(view.cur_layout.windows) do
         assert.is_true(win:is_valid())
         local bufnr = vim.api.nvim_win_get_buf(win.id)
-        assert.are.equal("", buf_do_rhs(bufnr))
+        assert.is_nil(buf_do_rhs(bufnr))
       end
 
       helpers.close_view(view)

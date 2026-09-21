@@ -5,6 +5,8 @@ local oop = require("diffview.oop")
 local EventEmitter = lazy.access("diffview.events", "EventEmitter") ---@type EventEmitter|LazyModule
 local Window = lazy.access("diffview.scene.window", "Window") ---@type Window|LazyModule
 local utils = lazy.require("diffview.utils") ---@module "diffview.utils"
+local LayoutEngine = require("diffview.ui.layout_engine")
+local LayoutSpec = require("diffview.ui.layout_spec")
 
 local api = vim.api
 local await = async.await
@@ -18,6 +20,8 @@ local M = {}
 ---@field name string
 ---@field state table
 ---@field symbols string[] # Set on subclasses: ordered window-slot keys (e.g. {"a","b"}).
+---@field engine diffview.LayoutEngine
+---@field spec? diffview.LayoutSpec
 local Layout = oop.create_class("Layout")
 
 function Layout:init(opt)
@@ -25,6 +29,7 @@ function Layout:init(opt)
   self.windows = opt.windows or {}
   self.emitter = opt.emitter or EventEmitter()
   self.state = {}
+  self.engine = LayoutEngine.new()
 end
 
 ---@diagnostic disable: unused-local, missing-return
@@ -124,32 +129,61 @@ Layout.create_wins = async.void(function(self, pivot, win_specs, win_order)
   self:create_pre()
   pivot = pivot or self:find_pivot()
   assert(api.nvim_win_is_valid(pivot), "Layout creation requires a valid window pivot!")
-
-  for _, win in ipairs(self.windows) do
-    if win.id ~= pivot then
-      win:close(true)
-    end
+  local spec_name = self.name
+  if type(spec_name) ~= "string" or spec_name == "" then
+    spec_name = "layout"
   end
-
-  for _, spec in ipairs(win_specs) do
-    local sym, cmd = spec[1], spec[2]
-    api.nvim_win_call(pivot, function()
-      vim.cmd(cmd)
-      local curwin = api.nvim_get_current_win()
-      if self[sym] then
-        self[sym]:set_id(curwin)
-      else
-        self[sym] = Window({ id = curwin })
-      end
-    end)
+  self.spec = LayoutSpec.from_legacy(spec_name, win_specs, win_order)
+  self.engine = self.engine or LayoutEngine.new()
+  local slots = {}
+  for _, symbol in ipairs(win_order) do
+    slots[symbol] = self[symbol]
   end
-
-  api.nvim_win_close(pivot, true)
-  self.windows = vim.tbl_map(function(s)
-    return self[s]
-  end, win_order)
+  self.windows = self.engine:apply(self.spec, pivot, slots, function(symbol, winid)
+    local win = Window({ id = winid })
+    self[symbol] = win
+    return win
+  end)
   await(self:create_post())
 end)
+
+---@class Layout.RoundtripState
+---@field focused? string
+---@field slots table<string, diffview.WindowLease.State>
+
+---Capture every slot independently so layout A -> B -> A restores cursor,
+---viewport, folds and focus without changing the files owned by the entry.
+---@return Layout.RoundtripState
+function Layout:capture_state()
+  local state = { slots = {} }
+  for _, symbol in ipairs(self.symbols or {}) do
+    local win = self[symbol]
+    if win and win.lease then
+      state.slots[symbol] = win.lease:capture()
+      if win:is_focused() then
+        state.focused = symbol
+      end
+    end
+  end
+  return state
+end
+
+---@param state Layout.RoundtripState?
+function Layout:restore_state(state)
+  if not state then
+    return
+  end
+  for symbol, slot_state in pairs(state.slots) do
+    local win = self[symbol]
+    if win and win.lease then
+      win.lease:restore(slot_state)
+    end
+  end
+  local focused = state.focused and self[state.focused]
+  if focused then
+    focused:focus()
+  end
+end
 
 ---Check if any of the windows in the lauout are focused.
 ---@return boolean

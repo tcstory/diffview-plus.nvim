@@ -10,6 +10,7 @@ local RevType = lazy.access("diffview.vcs.rev", "RevType") ---@type RevType|Lazy
 local config = lazy.require("diffview.config") ---@module "diffview.config"
 local lib = lazy.require("diffview.lib") ---@module "diffview.lib"
 local utils = lazy.require("diffview.utils") ---@module "diffview.utils"
+local WindowLease = require("diffview.ui.window_lease")
 
 local api = vim.api
 local await, pawait = async.await, async.pawait
@@ -24,6 +25,7 @@ local M = {}
 ---@field file vcs.File
 ---@field parent Layout
 ---@field emitter EventEmitter
+---@field lease? diffview.WindowLease
 local Window = oop.create_class("Window")
 
 Window.winopt_store = {}
@@ -40,6 +42,9 @@ function Window:init(opt)
   self.file = opt.file
   self.parent = opt.parent
   self.emitter = EventEmitter()
+  if self.id and api.nvim_win_is_valid(self.id) then
+    self.lease = WindowLease.new(self.id)
+  end
 
   self.emitter:on("post_open", utils.bind(self.post_open, self))
 end
@@ -449,6 +454,7 @@ end
 
 function Window:set_id(id)
   self.id = id
+  self.lease = id and api.nvim_win_is_valid(id) and WindowLease.new(id) or nil
 end
 
 function Window:set_file(file)

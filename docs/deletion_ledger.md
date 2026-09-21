@@ -134,12 +134,12 @@ deletion is expected.
 
 | Field | Value |
 |-------|-------|
-| **Status** | 🔴 Scheduled |
+| **Status** | ✅ Ownership replaced; dispatch facades retained until final OOP removal |
 | **Files** | `lua/diffview/scene/view.lua`, `lua/diffview/scene/layout.lua`, `lua/diffview/scene/window.lua`, layout subclasses under `lua/diffview/scene/layouts/` |
 | **Reason** | Inheritance chains make it hard to understand which class handles which concern.  Composition via `ViewShell`, `LayoutSpec`, `BufferLease`, and `WindowLease` gives explicit ownership and testable sub-units. |
-| **Replacement** | `lua/diffview/ui/views/`, `lua/diffview/app/effect_scope.lua` |
+| **Replacement** | `lua/diffview/ui/{view_shell,layout_spec,layout_engine,buffer_lease,window_lease}.lua` |
 | **Phase** | 5 |
-| **Deleted in** | — |
+| **Deleted in** | Phase 5 completion commit (null-buffer guard and inherited ownership responsibilities); class-dispatch facade tracked for Phase 10 |
 
 ---
 

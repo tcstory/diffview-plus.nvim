@@ -465,13 +465,13 @@ require("diffview").setup({
 
 ### Phase 5：View、Layout 与 buffer ownership
 
-- [ ] 用组合替代 View/Layout/Window 的深继承结构。
-- [ ] 建立 `ViewShell`、`LayoutSpec`、`BufferLease`、`WindowLease`。
-- [ ] LayoutSpec 声明 slots/constraints，由一个 layout engine 创建和复用窗口。
-- [ ] buffer option/keymap/diagnostic/inlay-hint 改为 lease 生命周期管理。
-- [ ] 移除 null buffer 的领域快捷键 guards；loading 状态由 ViewShell 阻止 action。
-- [ ] layout 切换保存/恢复 cursor、viewport、fold 和 focus。
-- [ ] 清理时不影响用户原有 buffer-local keymap/options。
+- [x] 用组合替代 View/Layout/Window 的深继承结构。
+- [x] 建立 `ViewShell`、`LayoutSpec`、`BufferLease`、`WindowLease`。
+- [x] LayoutSpec 声明 slots/constraints，由一个 layout engine 创建和复用窗口。
+- [x] buffer option/keymap/diagnostic/inlay-hint 改为 lease 生命周期管理。
+- [x] 移除 null buffer 的领域快捷键 guards；loading 状态由 ViewShell 阻止 action。
+- [x] layout 切换保存/恢复 cursor、viewport、fold 和 focus。
+- [x] 清理时不影响用户原有 buffer-local keymap/options。
 
 验收：任意 layout roundtrip 数据源不变；打开/关闭后用户窗口和 buffer 状态完全恢复。
 

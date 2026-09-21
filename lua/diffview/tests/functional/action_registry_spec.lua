@@ -238,6 +238,26 @@ describe("diffview.runtime.action_registry", function()
       assert.is_false(registry.is_available("test.avpred", "no"))
       assert.is_true(registry.is_available("test.avpred", "yes"))
     end)
+
+    it("gates all actions through the view shell", function()
+      registry.register({
+        id = "test.shell",
+        label = "",
+        desc = "",
+        category = "view",
+        execute = function() end,
+      })
+      local view = {
+        shell = {
+          can_execute = function()
+            return false, "View is loading"
+          end,
+        },
+      }
+      local available, reason = registry.availability("test.shell", view)
+      assert.is_false(available)
+      assert.equals("View is loading", reason)
+    end)
   end)
 
   describe("list", function()
