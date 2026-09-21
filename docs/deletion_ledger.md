@@ -98,7 +98,7 @@ deletion is expected.
 | **Reason** | The same action is declared separately for each layout, leading to duplication and divergence.  The refactor uses a single `ActionRegistry` entry per action; keymaps reference the action ID. |
 | **Replacement** | `lua/diffview/runtime/action_registry.lua`; all built-ins, factory variants and UI surfaces use action IDs |
 | **Phase** | 3 |
-| **Deleted in** | Working tree (Phase 3 completion; commit pending) |
+| **Deleted in** | commit `d9da23d` (Phase 3 completion) |
 
 ### Monolithic `actions.lua` (~1300 lines)
 
@@ -109,7 +109,7 @@ deletion is expected.
 | **Reason** | All actions in one file with no separation of concerns.  Splitting into domain modules (diff, history, merge, navigation, layout, file) makes each action's preconditions, side effects and tests self-contained. |
 | **Replacement** | `lua/diffview/actions/{diff,history,merge,navigation,layout,file,view}.lua`; `actions.lua` is a compatibility facade |
 | **Phase** | 3 |
-| **Deleted in** | Working tree (Phase 3 completion; commit pending) |
+| **Deleted in** | commit `d9da23d` (Phase 3 completion) |
 
 ---
 
