@@ -1694,10 +1694,12 @@ describe("diffview.vcs.adapters.jj", function()
         repo.jj({ "bookmark", "create", "main", "-r", "@" })
         repo.jj({ "git", "remote", "add", "origin", remote })
         local push_args = { "git", "push", "--remote", "origin", "--bookmark", "main" }
-        local help = vim.system({ "jj", "git", "push", "--help" }, {
-          cwd = repo.dir,
-          text = true,
-        }):wait()
+        local help = vim
+          .system({ "jj", "git", "push", "--help" }, {
+            cwd = repo.dir,
+            text = true,
+          })
+          :wait()
         if (help.stdout or ""):find("%-%-allow%-new") then
           push_args[#push_args + 1] = "--allow-new"
         end

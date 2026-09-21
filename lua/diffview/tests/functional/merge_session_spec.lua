@@ -132,10 +132,13 @@ describe("diffview.merge_session", function()
     local conflicts = vcs_utils.parse_conflicts(lines)
     eq(2, #conflicts)
     local first = conflicts[1]
-    vim.fn.writefile(vim.list_extend(
-      vim.list_extend(vim.list_slice(lines, 1, first.first - 1), { "manually resolved first" }),
-      vim.list_slice(lines, first.last + 1)
-    ), path)
+    vim.fn.writefile(
+      vim.list_extend(
+        vim.list_extend(vim.list_slice(lines, 1, first.first - 1), { "manually resolved first" }),
+        vim.list_slice(lines, first.last + 1)
+      ),
+      path
+    )
 
     local err, adapter = vcs.get_adapter({ top_indicators = { repo } })
     assert.is_nil(err)
@@ -159,46 +162,49 @@ describe("diffview.merge_session", function()
     eq(0, session:counts())
   end)
 
-  it("tracks choices and applies all Result buffers only after every conflict is resolved", function()
-    repo = make_conflict_repo()
-    local err, adapter = vcs.get_adapter({ top_indicators = { repo } })
-    assert.is_nil(err)
+  it(
+    "tracks choices and applies all Result buffers only after every conflict is resolved",
+    function()
+      repo = make_conflict_repo()
+      local err, adapter = vcs.get_adapter({ top_indicators = { repo } })
+      assert.is_nil(err)
 
-    local session = MergeSession(adapter, { "file.txt" })
-    local entry = assert(session:get("file.txt"))
-    local bufnr = vim.api.nvim_create_buf(false, true)
-    vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, entry.result)
-    session:attach("file.txt", bufnr, { stats = {} })
+      local session = MergeSession(adapter, { "file.txt" })
+      local entry = assert(session:get("file.txt"))
+      local bufnr = vim.api.nvim_create_buf(false, true)
+      vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, entry.result)
+      session:attach("file.txt", bufnr, { stats = {} })
 
-    local ok, apply_err = session:apply()
-    assert.is_false(ok)
-    assert.truthy(apply_err:find("2 conflict", 1, true))
+      local ok, apply_err = session:apply()
+      assert.is_false(ok)
+      assert.truthy(apply_err:find("2 conflict", 1, true))
 
-    assert.is_true(session:choose("file.txt", 6, "ours"))
-    assert.is_true(session:choose("file.txt", 11, "theirs"))
-    eq(0, session:counts())
+      assert.is_true(session:choose("file.txt", 6, "ours"))
+      assert.is_true(session:choose("file.txt", 11, "theirs"))
+      eq(0, session:counts())
 
-    ok, apply_err = session:apply()
-    assert.is_true(ok, apply_err)
-    eq({
-      "top ours",
-      "top context 1",
-      "top context 2",
-      "top context 3",
-      "top context 4",
-      "first ours",
-      "middle 1",
-      "middle 2",
-      "middle 3",
-      "middle 4",
-      "second theirs",
-      "bottom context 1",
-      "bottom context 2",
-      "bottom context 3",
-      "bottom context 4",
-      "bottom theirs",
-    }, vim.fn.readfile(repo .. "/file.txt"))
-  end)
+      ok, apply_err = session:apply()
+      assert.is_true(ok, apply_err)
+      eq({
+        "top ours",
+        "top context 1",
+        "top context 2",
+        "top context 3",
+        "top context 4",
+        "first ours",
+        "middle 1",
+        "middle 2",
+        "middle 3",
+        "middle 4",
+        "second theirs",
+        "bottom context 1",
+        "bottom context 2",
+        "bottom context 3",
+        "bottom context 4",
+        "bottom theirs",
+      }, vim.fn.readfile(repo .. "/file.txt"))
+    end
+  )
 
   it("jumps past the current conflict when the cursor is inside a multi-line region", function()
     repo = make_conflict_repo()
@@ -328,7 +334,10 @@ describe("diffview.merge_session", function()
 
     local original = read_bytes(repo .. "/file.txt")
     assert.equals("\n", original:sub(-1))
-    assert.equals(0, vim.fn.writefile(vim.fn.readfile(repo .. "/file.txt"), repo .. "/file.txt", "b"))
+    assert.equals(
+      0,
+      vim.fn.writefile(vim.fn.readfile(repo .. "/file.txt"), repo .. "/file.txt", "b")
+    )
 
     local ok, apply_err = session:apply()
     assert.is_false(ok)

@@ -55,10 +55,10 @@ end)
 -- Both access paths are equivalent during the transition; the _G.DiffviewGlobal
 -- global will be removed once all call sites have been migrated.
 require("diffview.runtime.context").init({
-  logger      = DiffviewGlobal.logger,
-  emitter     = DiffviewGlobal.emitter,
+  logger = DiffviewGlobal.logger,
+  emitter = DiffviewGlobal.emitter,
   debug_level = DiffviewGlobal.debug_level,
-  state       = DiffviewGlobal.state,
+  state = DiffviewGlobal.state,
 })
 
 return true

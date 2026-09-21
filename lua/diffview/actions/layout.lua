@@ -11,9 +11,15 @@ return function(M, R)
   R.factory("layout.scroll_up", "Scroll view up", "Scroll the diff workspace up.", C, function()
     return M.scroll_view(-0.25)
   end)
-  R.factory("layout.scroll_down", "Scroll view down", "Scroll the diff workspace down.", C, function()
-    return M.scroll_view(0.25)
-  end)
+  R.factory(
+    "layout.scroll_down",
+    "Scroll view down",
+    "Scroll the diff workspace down.",
+    C,
+    function()
+      return M.scroll_view(0.25)
+    end
+  )
   for _, name in ipairs({
     "diff1_plain",
     "diff1_inline",

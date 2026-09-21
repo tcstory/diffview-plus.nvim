@@ -710,7 +710,9 @@ return function(view)
     end,
     unstage_all = function()
       if view.merge_session then
-        utils.warn("Unstaging is disabled in a transactional merge view. Close it before changing the index.")
+        utils.warn(
+          "Unstaging is disabled in a transactional merge view. Close it before changing the index."
+        )
         return
       end
       local success = view.adapter:reset_files()

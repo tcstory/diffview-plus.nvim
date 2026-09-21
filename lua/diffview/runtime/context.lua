@@ -60,11 +60,11 @@ function M.init(opts)
   if _initialised then
     error("[diffview.runtime.context] init() called more than once", 2)
   end
-  M.logger      = opts.logger
-  M.emitter     = opts.emitter
+  M.logger = opts.logger
+  M.emitter = opts.emitter
   M.debug_level = opts.debug_level
-  M.state       = opts.state
-  _initialised  = true
+  M.state = opts.state
+  _initialised = true
 end
 
 --- True when the context has been initialised and is safe to use.
