@@ -11,8 +11,6 @@ local FileMergeView = lazy.access("diffview.scene.views.diff.file_merge_view", "
 local MergeView = lazy.access("diffview.scene.views.diff.merge_view", "MergeView") ---@type MergeView|LazyModule
 local FileHistoryView =
   lazy.access("diffview.scene.views.file_history.file_history_view", "FileHistoryView") ---@type FileHistoryView|LazyModule
-local GitAdapter = lazy.access("diffview.vcs.adapters.git", "GitAdapter") ---@type GitAdapter|LazyModule
-local HgAdapter = lazy.access("diffview.vcs.adapters.hg", "HgAdapter") ---@type HgAdapter|LazyModule
 local NullAdapter = lazy.access("diffview.vcs.adapters.null", "NullAdapter") ---@type NullAdapter|LazyModule
 local StandardView = lazy.access("diffview.scene.views.standard.standard_view", "StandardView") ---@type StandardView|LazyModule
 local arg_parser = lazy.require("diffview.arg_parser") ---@module "diffview.arg_parser"
@@ -21,6 +19,7 @@ local rev_lib = lazy.require("diffview.vcs.rev") ---@module "diffview.vcs.rev"
 local session = lazy.require("diffview.session") ---@module "diffview.session"
 local vcs = lazy.require("diffview.vcs") ---@module "diffview.vcs"
 local utils = lazy.require("diffview.utils") ---@module "diffview.utils"
+local Capability = require("diffview.vcs.capability").Capability
 
 local api = vim.api
 local logger = require("diffview.runtime.context").logger
@@ -144,8 +143,8 @@ function M.diffview_merge_open(args)
   end
   ---@cast adapter -?
 
-  if not adapter:instanceof(GitAdapter.__get()) then
-    utils.err(":DiffviewMergeOpen currently supports Git repositories only.")
+  if not adapter:supports(Capability.TRANSACTIONAL_MERGE) then
+    utils.err(":DiffviewMergeOpen is not supported by the current VCS adapter.")
     return
   end
 
@@ -162,19 +161,18 @@ function M.diffview_merge_open(args)
     end
   end
 
-  local cmd = { "diff", "--name-only", "--diff-filter=U" }
-  if #adapter.ctx.path_args > 0 then
-    vim.list_extend(cmd, { "--" })
-    vim.list_extend(cmd, adapter.ctx.path_args)
-  end
-  local paths, code, stderr = adapter:exec_sync(cmd, {
-    cwd = adapter.ctx.toplevel,
-    silent = true,
-  })
-  if code ~= 0 then
-    utils.err(utils.vec_join("Unable to list conflicted files.", stderr))
+  local result = adapter:list_conflicted_files(adapter.ctx.path_args)
+  if not result.ok then
+    local query_error = result.error
+    utils.err(
+      utils.vec_join(
+        query_error and query_error.message or "Unable to list conflicted files.",
+        query_error and query_error.stderr or nil
+      )
+    )
     return
   end
+  local paths = result.value --[[@as string[] ]]
   if #paths == 0 then
     utils.info("No conflicted files found.")
     return
@@ -241,11 +239,8 @@ function M.file_history(range, args)
     pin_local = config.get_config().view.file_history.pin_local or false
   end
 
-  if
-    pin_local
-    and not (adapter:instanceof(GitAdapter.__get()) or adapter:instanceof(HgAdapter.__get()))
-  then
-    utils.err("`--pin-local` is only supported for git and mercurial repositories.")
+  if pin_local and not adapter:supports(Capability.PIN_LOCAL) then
+    utils.err("`--pin-local` is not supported by the current VCS adapter.")
     return
   end
 
@@ -327,9 +322,6 @@ function M.diffview_diff_files(args)
   end
 
   local toplevel = pl:parent(left_path) or "."
-  -- LuaLS picks up `GitAdapter.create`'s 2-arg signature when both adapters
-  -- are imported in this file, so suppress the spurious diagnostics.
-  ---@diagnostic disable-next-line: missing-parameter, param-type-mismatch
   local adapter = NullAdapter.create({ toplevel = toplevel })
 
   local v = FileDiffView({

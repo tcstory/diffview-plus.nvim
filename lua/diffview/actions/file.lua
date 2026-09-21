@@ -1,4 +1,5 @@
 return function(_, R)
+  local Capability = require("diffview.vcs.capability").Capability
   local C = R.category.FILE
   local specs = {
     { "file.goto_file", "Go to file", "Open the current file.", "goto_file" },
@@ -60,7 +61,9 @@ return function(_, R)
     "Restore the selected entry.",
     C,
     "restore_entry",
-    nil,
+    R.contextual(function(view)
+      return view and view.adapter and view.adapter:supports(Capability.RESTORE)
+    end, "The current VCS adapter cannot restore files"),
     {
       danger = true,
       confirm = "Restore the selected entry? This can overwrite working-tree changes.",

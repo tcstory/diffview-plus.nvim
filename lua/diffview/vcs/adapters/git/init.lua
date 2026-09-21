@@ -13,11 +13,17 @@ local VCSAdapter = require("diffview.vcs.adapter").VCSAdapter
 local arg_parser = require("diffview.arg_parser")
 local async = require("diffview.async")
 local config = require("diffview.config")
+local capability_lib = require("diffview.vcs.capability")
+local git_history = require("diffview.vcs.adapters.git.history")
+local git_merge = require("diffview.vcs.adapters.git.merge")
 local git_parser = require("diffview.vcs.adapters.git.parser")
+local git_stage = require("diffview.vcs.adapters.git.stage")
+local git_status = require("diffview.vcs.adapters.git.status")
 local lazy = require("diffview.lazy")
 local oop = require("diffview.oop")
 local utils = require("diffview.utils")
 local vcs_utils = require("diffview.vcs.utils")
+local path_builder = require("diffview.vcs.path_args")
 
 local api = vim.api
 local await, pawait = async.await, async.pawait
@@ -60,6 +66,18 @@ local GitAdapter = oop.create_class("GitAdapter", VCSAdapter)
 
 GitAdapter.Rev = GitRev
 GitAdapter.config_key = "git"
+GitAdapter.capabilities = capability_lib.set(
+  capability_lib.Capability.STATUS,
+  capability_lib.Capability.HISTORY,
+  capability_lib.Capability.MERGE_CONTEXT,
+  capability_lib.Capability.TRANSACTIONAL_MERGE,
+  capability_lib.Capability.STAGE,
+  capability_lib.Capability.RESTORE,
+  capability_lib.Capability.PIN_LOCAL,
+  capability_lib.Capability.INDEX_WATCH,
+  capability_lib.Capability.REVISION,
+  capability_lib.Capability.COMPLETION
+)
 GitAdapter.bootstrap = {
   done = false,
   ok = false,
@@ -343,7 +361,7 @@ function GitAdapter:get_show_args(path, rev)
     self:args(),
     "show",
     "--no-show-signature",
-    fmt("%s:%s", rev and rev:object_name() or "", path)
+    path_builder.git_object(rev and rev:object_name() or "", path)
   )
 end
 
@@ -351,26 +369,7 @@ end
 ---@param paths? string[] # Optional file paths to filter the log by.
 ---@return string[]
 function GitAdapter:get_log_args(args, paths)
-  -- `git log -- <path>` interprets the path as a pathspec, so a literal
-  -- filename with `*`, `?`, `[`, or a leading `:` glob/misfire. `:(literal)`
-  -- pathspec magic (supported since git 1.9) forces exact match, matching
-  -- how the jj adapter's `quote_path_args` handles the same concern.
-  local literal_paths = paths
-      and #paths > 0
-      and vim.tbl_map(function(p)
-        return ":(literal)" .. p
-      end, paths)
-    or nil
-  return utils.vec_join(
-    self:args(),
-    "log",
-    "--no-show-signature",
-    "--first-parent",
-    "--stat",
-    args,
-    literal_paths and "--" or nil,
-    literal_paths
-  )
+  return git_history.log_args(self:args(), args, paths)
 end
 
 function GitAdapter:get_dir(path)
@@ -394,58 +393,15 @@ end
 
 ---@return vcs.MergeContext?
 function GitAdapter:get_merge_context()
-  local their_head
+  return git_merge.context(self)
+end
 
-  for _, name in ipairs({ "MERGE_HEAD", "REBASE_HEAD", "REVERT_HEAD", "CHERRY_PICK_HEAD" }) do
-    if pl:readable(pl:join(self.ctx.dir, name)) then
-      their_head = name
-      break
-    end
-  end
+function GitAdapter:list_conflicted_files(paths, token)
+  return git_merge.conflicted_files(self, paths, token)
+end
 
-  if not their_head then
-    -- We were unable to find THEIR head. Merge could be a result of an applied
-    -- stash (or something else?). Either way, we can't proceed.
-    return
-  end
-
-  local ret = {}
-  local out, code = self:exec_sync(
-    { "show", "-s", "--no-show-signature", "--pretty=format:%H%n%D", "HEAD", "--" },
-    self.ctx.toplevel
-  )
-
-  ret.ours = code ~= 0 and {} or {
-    hash = out[1],
-    ref_names = out[2],
-  }
-
-  out, code = self:exec_sync(
-    { "show", "-s", "--no-show-signature", "--pretty=format:%H%n%D", their_head, "--" },
-    self.ctx.toplevel
-  )
-
-  ret.theirs = code ~= 0 and {} or {
-    hash = out[1],
-    ref_names = out[2],
-  }
-
-  out, code = self:exec_sync({ "merge-base", "HEAD", their_head }, self.ctx.toplevel)
-  if code ~= 0 then
-    -- merge-base can fail during --root rebases for initial commits.
-    -- Use the canonical empty tree SHA as the base.
-    ret.base = { hash = self.Rev.NULL_TREE_SHA, ref_names = nil }
-  else
-    ret.base = {
-      hash = out[1],
-      ref_names = self:exec_sync(
-        { "show", "-s", "--no-show-signature", "--pretty=format:%D", out[1] },
-        self.ctx.toplevel
-      )[1],
-    }
-  end
-
-  return ret
+function GitAdapter:index_watch_path()
+  return pl:join(self.ctx.dir, "index")
 end
 
 ---@class GitAdapter.PreparedLogOpts
@@ -741,7 +697,7 @@ function GitAdapter:history_scope(path_args, log_options)
   -- ls-files call canonicalises to git's relative emission, so absolute
   -- and relative spellings of the same file also share a cache key.
   local out = self:exec_sync(
-    utils.vec_join("-c", "core.quotePath=false", "ls-files", "--", path_args),
+    path_builder.append({ "-c", "core.quotePath=false", "ls-files" }, path_args),
     self.ctx.toplevel
   )
   if #out == 1 then
@@ -780,7 +736,7 @@ function GitAdapter:is_single_file(path_args, lflags)
     return #path_args == 1
       and not pl:is_dir(path_args[1])
       and #self:exec_sync(
-          utils.vec_join("-c", "core.quotePath=false", "ls-files", "--", path_args),
+          path_builder.append({ "-c", "core.quotePath=false", "ls-files" }, path_args),
           self.ctx.toplevel
         )
         < 2
@@ -961,7 +917,7 @@ end
 ---@param path_args string[]
 ---@return table<string, true>?
 function GitAdapter:fh_compute_pushed_set(path_args)
-  local out, code = self:exec_sync(utils.vec_join("rev-list", "--remotes", "--", path_args), {
+  local out, code = self:exec_sync(path_builder.append({ "rev-list", "--remotes" }, path_args), {
     cwd = self.ctx.toplevel,
     log_opt = { label = "GitAdapter:fh_compute_pushed_set()" },
   })
@@ -1052,10 +1008,11 @@ function GitAdapter:fh_compute_merged_set(main_refs, path_args)
     return {}
   end
 
-  local out, code = self:exec_sync(utils.vec_join("rev-list", main_refs, "--", path_args), {
-    cwd = self.ctx.toplevel,
-    log_opt = { label = "GitAdapter:fh_compute_merged_set()" },
-  })
+  local out, code =
+    self:exec_sync(path_builder.append(utils.vec_join("rev-list", main_refs), path_args), {
+      cwd = self.ctx.toplevel,
+      log_opt = { label = "GitAdapter:fh_compute_merged_set()" },
+    })
 
   if code ~= 0 then
     return nil
@@ -1879,7 +1836,7 @@ function GitAdapter:file_blob_hash(path, rev_arg)
   local out, code = self:exec_sync({
     "rev-parse",
     "--revs-only",
-    fmt("%s:%s", rev_arg or "", path),
+    path_builder.git_object(rev_arg, path),
   }, {
     cwd = self.ctx.toplevel,
     retry = 2,
@@ -2108,16 +2065,18 @@ GitAdapter.file_restore = async.wrap(function(self, path, kind, commit, callback
   local rel_path = pl:vim_fnamemodify(abs_path, ":~")
 
   -- Check if file exists in history
-  _, code = self:exec_sync(
-    { "cat-file", "-e", fmt("%s:%s", commit or (kind == "staged" and "HEAD") or "", path) },
-    self.ctx.toplevel
-  )
+  _, code = self:exec_sync({
+    "cat-file",
+    "-e",
+    path_builder.git_object(commit or (kind == "staged" and "HEAD") or "", path),
+  }, self.ctx.toplevel)
   local exists_git = code == 0
   local exists_local = pl:readable(abs_path)
 
   if exists_local then
     -- Write file blob into db
-    out, code = self:exec_sync({ "hash-object", "-w", "--", path }, self.ctx.toplevel)
+    out, code =
+      self:exec_sync(path_builder.append({ "hash-object", "-w" }, { path }), self.ctx.toplevel)
     if code ~= 0 then
       utils.err(
         "Failed to write file blob into the object database. Aborting file restoration.",
@@ -2168,10 +2127,12 @@ GitAdapter.file_restore = async.wrap(function(self, path, kind, commit, callback
     end
   else
     -- File exists in history: checkout
-    out, code = self:exec_sync(
-      utils.vec_join("checkout", commit or (kind == "staged" and "HEAD" or nil), "--", path),
-      self.ctx.toplevel
-    )
+    local checkout_args = { "checkout" }
+    local target = commit or (kind == "staged" and "HEAD" or nil)
+    if target then
+      checkout_args[#checkout_args + 1] = target
+    end
+    out, code = self:exec_sync(path_builder.append(checkout_args, { path }), self.ctx.toplevel)
 
     await(async.scheduler())
     local bn = utils.find_file_buffer(abs_path)
@@ -2207,10 +2168,7 @@ function GitAdapter:stage_index_file(file)
 
     local blob_hash = out[1]
 
-    out, code = self:exec_sync(
-      { "-c", "core.quotePath=false", "ls-files", "--stage", file.path },
-      self.ctx.toplevel
-    )
+    out, code = self:exec_sync(git_stage.index_entry_args(file.path), self.ctx.toplevel)
     local old_mode = out[1]:match("^(%d+)")
 
     if not old_mode then
@@ -2243,12 +2201,12 @@ function GitAdapter:stage_index_file(file)
 end
 
 function GitAdapter:reset_files(paths)
-  local _, code = self:exec_sync(utils.vec_join("reset", "--", paths), self.ctx.toplevel)
+  local _, code = self:exec_sync(git_stage.reset_args(paths), self.ctx.toplevel)
   return code == 0
 end
 
 function GitAdapter:add_files(paths)
-  local _, code = self:exec_sync(utils.vec_join("add", "--", paths), self.ctx.toplevel)
+  local _, code = self:exec_sync(git_stage.add_args(paths), self.ctx.toplevel)
   return code == 0
 end
 
@@ -2293,29 +2251,13 @@ GitAdapter.tracked_files = async.wrap(function(self, left, right, args, kind, op
 
   local namestat_job = Job({
     command = self:bin(),
-    args = utils.vec_join(
-      self:args(),
-      "diff",
-      "-z",
-      rename_flag,
-      "--ignore-submodules",
-      "--name-status",
-      args
-    ),
+    args = git_status.diff_args(self:args(), args, "--name-status", rename_flag),
     cwd = self.ctx.toplevel,
     log_opt = log_opt,
   })
   local numstat_job = Job({
     command = self:bin(),
-    args = utils.vec_join(
-      self:args(),
-      "diff",
-      "-z",
-      rename_flag,
-      "--ignore-submodules",
-      "--numstat",
-      args
-    ),
+    args = git_status.diff_args(self:args(), args, "--numstat", rename_flag),
     cwd = self.ctx.toplevel,
     log_opt = log_opt,
   })
@@ -2335,74 +2277,8 @@ GitAdapter.tracked_files = async.wrap(function(self, left, right, args, kind, op
       return
     end
 
-    -- Both jobs use `-z` for NUL-delimited output, which is safe for
-    -- filenames containing tabs or newlines.  Reassemble stdout into a
-    -- single string and split on NUL.
-    local namestat_fields =
-      vim.split(table.concat(namestat_job.stdout, "\n"), "\0", { plain = true })
-    local numstat_fields = vim.split(table.concat(numstat_job.stdout, "\n"), "\0", { plain = true })
-
-    -- Parse NUL-delimited --name-status: status\0name[\0oldname]\0...
-    namestat_entries = {}
-    local ni = 1
-    while ni <= #namestat_fields do
-      local field = namestat_fields[ni]
-      if field == "" then
-        ni = ni + 1
-      else
-        local status = field:sub(1, 1):gsub("%s", " ")
-        local name = namestat_fields[ni + 1]
-        local oldname
-
-        if status == "R" or status == "C" then
-          -- Renames and copies have an extra field: old\0new.
-          oldname = name
-          name = namestat_fields[ni + 2]
-          ni = ni + 3
-        else
-          ni = ni + 2
-        end
-
-        table.insert(namestat_entries, { status = status, name = name, oldname = oldname })
-      end
-    end
-
-    -- Parse NUL-delimited --numstat output.
-    -- Non-rename: "add\tdel\tpath\0" -> after split: "add\tdel\tpath"
-    -- Rename:     "add\tdel\t\0old\0new\0" -> after split: "add\tdel\t", "old", "new"
-    numstat_entries = {}
-    numstat_count = 0
-    local si = 1
-    while si <= #numstat_fields do
-      local field = numstat_fields[si]
-      if field == "" then
-        si = si + 1
-      else
-        local add_s, del_s, path = field:match("^([%d-]+)\t([%d-]+)\t(.*)")
-        if not add_s then
-          -- Malformed record; skip.
-          si = si + 1
-        else
-          local additions = tonumber(add_s)
-          local deletions = tonumber(del_s)
-
-          if path == "" then
-            -- Rename: the old and new paths follow as separate NUL fields.
-            si = si + 3
-          else
-            si = si + 1
-          end
-
-          -- Binary files have `-` for both additions and deletions, so
-          -- tonumber returns nil.  Use explicit indexing because
-          -- table.insert(t, nil) is a no-op in Lua.
-          numstat_count = numstat_count + 1
-          numstat_entries[numstat_count] = (additions and deletions)
-              and { additions = additions, deletions = deletions }
-            or nil
-        end
-      end
-    end
+    namestat_entries = git_status.parse_name_status(namestat_job.stdout)
+    numstat_entries, numstat_count = git_status.parse_numstat(numstat_job.stdout)
 
     if #namestat_entries == numstat_count then
       break

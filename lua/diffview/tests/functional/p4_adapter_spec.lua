@@ -10,7 +10,7 @@ local run = test_utils.run
 
 --- Return true when both `p4` and `p4d` are available on $PATH.
 local function p4_available()
-  return vim.fn.executable("p4") == 1 and vim.fn.executable("p4d") == 1
+  return test_utils.integration_available("p4", { "p4", "p4d" })
 end
 
 --- Create a disposable Perforce repository using rsh-mode (no daemon).

@@ -28,6 +28,28 @@ function M.skip_if_missing(binary)
   end
 end
 
+---Whether an optional VCS integration suite should run. Set
+---`DIFFVIEW_SKIP_<VCS>_INTEGRATION=1` to skip it explicitly even when the
+---binary is installed (useful for contributors without a configured server).
+---@param vcs string
+---@param binaries string|string[]
+---@return boolean
+function M.integration_available(vcs, binaries)
+  local skip_var = "DIFFVIEW_SKIP_" .. vcs:upper() .. "_INTEGRATION"
+  if vim.env[skip_var] == "1" then
+    return false
+  end
+  if type(binaries) == "string" then
+    binaries = { binaries }
+  end
+  for _, binary in ipairs(binaries) do
+    if vim.fn.executable(binary) ~= 1 then
+      return false
+    end
+  end
+  return true
+end
+
 function M.eq(a, b)
   if a == nil or b == nil then
     return assert.are.equal(a, b)

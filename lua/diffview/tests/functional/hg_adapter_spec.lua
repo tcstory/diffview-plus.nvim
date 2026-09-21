@@ -9,7 +9,7 @@ local eq = helpers.eq
 local run = helpers.run
 
 local function hg_available()
-  return vim.fn.executable("hg") == 1
+  return helpers.integration_available("hg", "hg")
 end
 
 local function create_hg_repo()

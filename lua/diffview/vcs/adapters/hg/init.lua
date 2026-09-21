@@ -13,8 +13,10 @@ local VCSAdapter = require("diffview.vcs.adapter").VCSAdapter
 local arg_parser = require("diffview.arg_parser")
 local async = require("diffview.async")
 local config = require("diffview.config")
+local capability_lib = require("diffview.vcs.capability")
 local lazy = require("diffview.lazy")
 local oop = require("diffview.oop")
+local path_builder = require("diffview.vcs.path_args")
 local utils = require("diffview.utils")
 local vcs_utils = require("diffview.vcs.utils")
 
@@ -31,6 +33,15 @@ local HgAdapter = oop.create_class("HgAdapter", VCSAdapter)
 
 HgAdapter.Rev = HgRev
 HgAdapter.config_key = "hg"
+HgAdapter.capabilities = capability_lib.set(
+  capability_lib.Capability.STATUS,
+  capability_lib.Capability.HISTORY,
+  capability_lib.Capability.MERGE_CONTEXT,
+  capability_lib.Capability.RESTORE,
+  capability_lib.Capability.PIN_LOCAL,
+  capability_lib.Capability.REVISION,
+  capability_lib.Capability.COMPLETION
+)
 HgAdapter.bootstrap = {
   done = false,
   ok = false,
@@ -154,7 +165,10 @@ function HgAdapter:get_command()
 end
 
 function HgAdapter:get_show_args(path, rev)
-  return utils.vec_join(self:args(), "cat", "--rev", rev:object_name(), "--", path)
+  return path_builder.append(
+    utils.vec_join(self:args(), "cat", "--rev", rev:object_name()),
+    { path }
+  )
 end
 
 ---@param args string[]
@@ -172,13 +186,8 @@ function HgAdapter:get_log_args(args, paths)
         return "path:" .. p
       end, paths)
     or nil
-  return utils.vec_join(
-    self:args(),
-    "log",
-    "--stat",
-    "--rev",
-    args,
-    literal_paths and "--" or nil,
+  return path_builder.append(
+    utils.vec_join(self:args(), "log", "--stat", "--rev", args),
     literal_paths
   )
 end
@@ -554,7 +563,7 @@ function HgAdapter:history_scope(path_args, log_options) ---@diagnostic disable-
   end
   -- See `GitAdapter:history_scope` for why we resolve through `hg files`
   -- instead of using `path_args[1]` raw, and for the `#out == 0` fallback.
-  local out = self:exec_sync(utils.vec_join("files", "--", path_args), self.ctx.toplevel)
+  local out = self:exec_sync(path_builder.append({ "files" }, path_args), self.ctx.toplevel)
   if #out == 1 then
     return { single_file = true, path = out[1] }
   end
@@ -1164,12 +1173,12 @@ HgAdapter.file_restore = async.wrap(function(self, path, kind, commit, callback)
       end
     else
       -- File only exists in index
-      _, code = self:exec_sync({ "rm", "-f", "--", path }, self.ctx.toplevel)
+      _, code = self:exec_sync(path_builder.append({ "rm", "-f" }, { path }), self.ctx.toplevel)
     end
   else
     -- File exists in history: revert
     _, code = self:exec_sync(
-      utils.vec_join("revert", commit or (kind == "staged" and "HEAD" or nil), "--", path),
+      path_builder.append({ "revert", commit or (kind == "staged" and "HEAD" or nil) }, { path }),
       self.ctx.toplevel
     )
   end

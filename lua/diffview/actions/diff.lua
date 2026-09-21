@@ -1,4 +1,5 @@
 return function(M, R)
+  local Capability = require("diffview.vcs.capability").Capability
   local C = R.category.DIFF
   R.direct(
     "diff.diff_against_default_branch",
@@ -15,10 +16,16 @@ return function(M, R)
     "diffget_inline"
   )
   local stage = R.contextual(function(v)
-    return M._is_applicable(M.stage_all, v)
+    return v
+      and v.adapter
+      and v.adapter:supports(Capability.STAGE)
+      and M._is_applicable(M.stage_all, v)
   end, "This view has no stageable working tree")
   local toggle = R.contextual(function(v)
-    return M._is_applicable(M.toggle_stage_entry, v)
+    return v
+      and v.adapter
+      and v.adapter:supports(Capability.STAGE)
+      and M._is_applicable(M.toggle_stage_entry, v)
   end, "The selected entry cannot be staged or resolved here")
   R.direct("diff.stage_all", "Stage all", "Stage all entries.", C, "stage_all", stage)
   R.direct("diff.unstage_all", "Unstage all", "Unstage all entries.", C, "unstage_all", stage)

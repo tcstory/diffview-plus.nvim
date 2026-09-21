@@ -15,6 +15,7 @@ local VCSAdapter = require("diffview.vcs.adapter").VCSAdapter
 local arg_parser = require("diffview.arg_parser")
 local async = require("diffview.async")
 local config = require("diffview.config")
+local capability_lib = require("diffview.vcs.capability")
 local lazy = require("diffview.lazy")
 local oop = require("diffview.oop")
 local utils = require("diffview.utils")
@@ -36,6 +37,14 @@ local P4Adapter = oop.create_class("P4Adapter", VCSAdapter)
 
 P4Adapter.Rev = P4Rev
 P4Adapter.config_key = "p4" -- Key for config table; reuses the `HgLogOptions` schema.
+P4Adapter.capabilities = capability_lib.set(
+  capability_lib.Capability.STATUS,
+  capability_lib.Capability.HISTORY,
+  capability_lib.Capability.MERGE_CONTEXT,
+  capability_lib.Capability.RESTORE,
+  capability_lib.Capability.REVISION,
+  capability_lib.Capability.COMPLETION
+)
 P4Adapter.bootstrap = {
   done = false,
   ok = false,

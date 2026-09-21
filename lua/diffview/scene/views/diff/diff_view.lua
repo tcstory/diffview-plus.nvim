@@ -16,7 +16,7 @@ local debounce = lazy.require("diffview.debounce") ---@module "diffview.debounce
 local utils = lazy.require("diffview.utils") ---@module "diffview.utils"
 local vcs_utils = lazy.require("diffview.vcs.utils") ---@module "diffview.vcs.utils"
 local File = lazy.access("diffview.vcs.file", "File") ---@type vcs.File|LazyModule
-local GitAdapter = lazy.access("diffview.vcs.adapters.git", "GitAdapter") ---@type GitAdapter|LazyModule
+local Capability = require("diffview.vcs.capability").Capability
 
 local api = vim.api
 local await = async.await
@@ -105,8 +105,8 @@ function DiffView:post_open()
     name = fmt("diffview://%s/log/%d/%s", self.adapter.ctx.dir, self.tabpage, "commit_log"),
   })
 
-  if config.get_config().watch_index and self.adapter:instanceof(GitAdapter.__get()) then
-    local index_path = self.adapter.ctx.dir .. "/index"
+  if config.get_config().watch_index and self.adapter:supports(Capability.INDEX_WATCH) then
+    local index_path = assert(self.adapter:index_watch_path(), "index watcher requires a path")
     self.watcher = assert(vim.uv.new_fs_poll(), "Failed to create fs poll handle!")
 
     -- The git index always ends with a SHA-1 (20B) or SHA-256 (32B) checksum

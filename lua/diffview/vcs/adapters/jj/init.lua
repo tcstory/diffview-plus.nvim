@@ -12,8 +12,10 @@ local VCSAdapter = require("diffview.vcs.adapter").VCSAdapter
 local arg_parser = require("diffview.arg_parser")
 local async = require("diffview.async")
 local config = require("diffview.config")
+local capability_lib = require("diffview.vcs.capability")
 local lazy = require("diffview.lazy")
 local oop = require("diffview.oop")
+local path_builder = require("diffview.vcs.path_args")
 local utils = require("diffview.utils")
 local vcs_utils = require("diffview.vcs.utils")
 
@@ -32,6 +34,14 @@ local JjAdapter = oop.create_class("JjAdapter", VCSAdapter)
 
 JjAdapter.Rev = JjRev
 JjAdapter.config_key = "jj"
+JjAdapter.capabilities = capability_lib.set(
+  capability_lib.Capability.STATUS,
+  capability_lib.Capability.HISTORY,
+  capability_lib.Capability.MERGE_CONTEXT,
+  capability_lib.Capability.RESTORE,
+  capability_lib.Capability.REVISION,
+  capability_lib.Capability.COMPLETION
+)
 JjAdapter.bootstrap = {
   done = false,
   ok = false,
@@ -307,7 +317,10 @@ end
 ---@return string[] # Workspace-relative paths, one per line
 function JjAdapter:list_files_at_head(path_args)
   local out = self:exec_sync(
-    utils.vec_join("file", "list", "-r", "@", "--", quote_path_args(path_args, self.ctx.toplevel)),
+    path_builder.append(
+      { "file", "list", "-r", "@" },
+      quote_path_args(path_args, self.ctx.toplevel)
+    ),
     { cwd = self.ctx.toplevel, silent = true }
   )
   return out or {}
@@ -317,14 +330,9 @@ end
 ---@param rev Rev?
 ---@return string[]
 function JjAdapter:get_show_args(path, rev)
-  return utils.vec_join(
-    self:args(),
-    "file",
-    "show",
-    "-r",
-    rev and rev:object_name() or "@",
-    "--",
-    fileset_exact(path)
+  return path_builder.append(
+    utils.vec_join(self:args(), "file", "show", "-r", rev and rev:object_name() or "@"),
+    { fileset_exact(path) }
   )
 end
 

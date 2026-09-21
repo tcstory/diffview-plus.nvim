@@ -7,6 +7,8 @@ on:
     branches: [main]
 
 env:
+  GIT_VERSION: "2.53.0"
+  HG_VERSION: "7.0.1"
   P4_VERSION: r24.2
   JJ_VERSION: "0.39.0"
   LUALS_VERSION: 3.13.4
@@ -135,7 +137,7 @@ jobs:
           if-no-files-found: ignore
 
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -148,6 +150,28 @@ jobs:
     name: Test (Neovim ${{ matrix.neovim }})
     steps:
       - uses: actions/checkout@v4
+
+      - name: Cache pinned Git
+        id: cache-git
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/git-${{ env.GIT_VERSION }}
+          key: git-${{ env.GIT_VERSION }}-linux-x86_64
+
+      - name: Build pinned Git
+        if: steps.cache-git.outputs.cache-hit != 'true'
+        run: |
+          curl -sL "https://www.kernel.org/pub/software/scm/git/git-${GIT_VERSION}.tar.xz" \
+            | tar xJ
+          make -C "git-${GIT_VERSION}" -j2 \
+            prefix="$HOME/.local/git-${GIT_VERSION}" \
+            NO_TCLTK=YesPlease NO_GETTEXT=YesPlease all install
+
+      - name: Expose pinned Git on PATH
+        run: echo "$HOME/.local/git-${GIT_VERSION}/bin" >> "$GITHUB_PATH"
+
+      - name: Verify pinned Git version
+        run: test "$(git --version | awk '{print $3}')" = "${GIT_VERSION}"
 
       - uses: rhysd/action-setup-vim@v1
         with:
@@ -179,7 +203,7 @@ jobs:
           chmod +x ~/.local/bin/jj
 
       - name: Install Mercurial
-        run: pip install mercurial
+        run: pip install "mercurial==${HG_VERSION}"
 
       - name: Run tests
         # Keep nightly as an early-warning signal but don't let it block PRs.

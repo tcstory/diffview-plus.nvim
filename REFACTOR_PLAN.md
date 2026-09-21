@@ -477,13 +477,13 @@ require("diffview").setup({
 
 ### Phase 6：VCS adapter 端口化
 
-- [ ] 定义 adapter capability、query result、error 和 cancellation contract。
-- [ ] Git adapter 按 status/history/merge/stage 子模块拆分。
-- [ ] JJ/Hg/P4 只实现声明支持的 capability。
-- [ ] parser 变成纯函数，与 process orchestration 分离。
-- [ ] 所有路径参数使用 literal-safe builder，不在 adapter 内拼 shell string。
-- [ ] adapter error 转换成结构化错误，UI 决定展示方式。
-- [ ] integration matrix 固定 Git/JJ 版本，并允许 Hg/P4 明确 skip。
+- [x] 定义 adapter capability、query result、error 和 cancellation contract。
+- [x] Git adapter 按 status/history/merge/stage 子模块拆分。
+- [x] JJ/Hg/P4 只实现声明支持的 capability。
+- [x] parser 变成纯函数，与 process orchestration 分离。
+- [x] 所有路径参数使用 literal-safe builder，不在 adapter 内拼 shell string。
+- [x] adapter error 转换成结构化错误，UI 决定展示方式。
+- [x] integration matrix 固定 Git/JJ 版本，并允许 Hg/P4 明确 skip。
 
 验收：同一 UI 不含 adapter 类型判断；unsupported action 不出现；parser 可独立 fuzz/property test。
 

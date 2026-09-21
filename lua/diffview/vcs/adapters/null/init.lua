@@ -5,6 +5,7 @@ local oop = require("diffview.oop")
 local NullRev = lazy.access("diffview.vcs.adapters.null.rev", "NullRev") ---@type NullRev|LazyModule
 local VCSAdapter = lazy.access("diffview.vcs.adapter", "VCSAdapter") ---@type VCSAdapter|LazyModule
 local arg_parser = lazy.require("diffview.arg_parser") ---@module "diffview.arg_parser"
+local capability_lib = require("diffview.vcs.capability")
 
 local M = {}
 
@@ -13,6 +14,7 @@ local M = {}
 local NullAdapter = oop.create_class("NullAdapter", VCSAdapter.__get())
 
 NullAdapter.Rev = NullRev --[[@as NullRev ]]
+NullAdapter.capabilities = capability_lib.set(capability_lib.Capability.STATUS)
 
 ---@class NullAdapter.create.Opt
 ---@field toplevel string

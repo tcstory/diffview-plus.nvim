@@ -143,6 +143,32 @@ deletion is expected.
 
 ---
 
+## Phase 6 — VCS adapter ports
+
+### Adapter identity checks in UI and action surfaces
+
+| Field | Value |
+|-------|-------|
+| **Status** | ✅ Replaced |
+| **Files** | `lua/diffview/lib.lua`, `lua/diffview/actions/`, `lua/diffview/scene/views/diff/diff_view.lua` |
+| **Reason** | UI code coupled to Git/Hg classes made every new adapter require presentation-layer branches and exposed unsupported actions. |
+| **Replacement** | Declarative `vcs.Capability` sets plus adapter-owned query methods returning structured results. |
+| **Phase** | 6 |
+| **Deleted in** | Phase 6 completion commit |
+
+### Monolithic Git command and parser responsibilities
+
+| Field | Value |
+|-------|-------|
+| **Status** | ✅ Split; compatibility methods remain on `GitAdapter` |
+| **Files** | `lua/diffview/vcs/adapters/git/init.lua` |
+| **Reason** | Mixing argv construction, process execution, parsing, and presentation made path safety and parser testing difficult to audit. |
+| **Replacement** | Pure `git/{status,history,merge,stage}.lua` ports and shared `vcs/path_args.lua`; adapter methods delegate while existing call sites migrate. |
+| **Phase** | 6 |
+| **Deleted in** | Phase 6 completion commit (duplicated builders/parsers); remaining facade removal is tracked for Phase 10 |
+
+---
+
 ## Phase 10 — Final cleanup
 
 ### Self-built OOP framework (`oop.lua`, `Object:extend`, etc.)

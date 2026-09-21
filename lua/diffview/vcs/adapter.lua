@@ -9,6 +9,8 @@ local RevType = lazy.access("diffview.vcs.rev", "RevType") ---@type RevType|Lazy
 local arg_parser = lazy.require("diffview.arg_parser") ---@module "diffview.arg_parser"
 local utils = lazy.require("diffview.utils") ---@module "diffview.utils"
 local vcs_utils = lazy.require("diffview.vcs.utils") ---@module "diffview.vcs.utils"
+local capability_lib = require("diffview.vcs.capability")
+local query = require("diffview.vcs.query")
 
 local await = async.await
 local fmt = string.format
@@ -51,6 +53,7 @@ local M = {}
 ---@field bootstrap vcs.adapter.VCSAdapter.Bootstrap
 ---@field ctx vcs.adapter.VCSAdapter.Ctx
 ---@field flags vcs.adapter.VCSAdapter.Flags
+---@field capabilities table<vcs.Capability, true>
 local VCSAdapter = oop.create_class("VCSAdapter")
 
 VCSAdapter.Rev = Rev
@@ -60,6 +63,7 @@ VCSAdapter.bootstrap = {
   ok = false,
   version = {},
 }
+VCSAdapter.capabilities = {}
 
 function VCSAdapter.run_bootstrap()
   VCSAdapter.bootstrap.done = true
@@ -220,6 +224,26 @@ function VCSAdapter:init()
     file_history = arg_parser.FlagValueMap(),
     open = arg_parser.FlagValueMap(),
   }
+end
+
+---@param capability vcs.Capability
+---@return boolean
+function VCSAdapter:supports(capability)
+  return self.capabilities[capability] == true
+end
+
+---@param capability vcs.Capability
+---@param operation? string
+---@return vcs.QueryError?
+function VCSAdapter:unsupported(capability, operation)
+  if self:supports(capability) then
+    return nil
+  end
+  return query.error(
+    query.ErrorKind.UNSUPPORTED,
+    ("Adapter '%s' does not support %s"):format(self.config_key or "unknown", capability),
+    { adapter = self.config_key, operation = operation }
+  )
 end
 
 ---@diagnostic disable: unused-local, missing-return
@@ -423,6 +447,42 @@ function VCSAdapter:exec_sync(args, cwd_or_opt)
   return utils.job(cmd, cwd_or_opt)
 end
 
+---@class vcs.adapter.QueryOpt
+---@field cwd? string
+---@field operation? string
+---@field token? vcs.CancellationToken
+---@field silent? boolean
+
+---Execute an argv query and return data/error without presenting it.
+---@param args string[]
+---@param opt? vcs.adapter.QueryOpt
+---@return vcs.QueryResult
+function VCSAdapter:query(args, opt)
+  opt = opt or {}
+  local context = { adapter = self.config_key, operation = opt.operation }
+  local cancelled = query.cancelled(opt.token, context)
+  if cancelled then
+    return cancelled
+  end
+  local stdout, code, stderr = self:exec_sync(args, {
+    cwd = opt.cwd or self.ctx.toplevel,
+    silent = opt.silent,
+  })
+  cancelled = query.cancelled(opt.token, context)
+  if cancelled then
+    return cancelled
+  end
+  if code ~= 0 then
+    return query.fail(query.error(query.ErrorKind.EXEC, "VCS command failed", {
+      adapter = self.config_key,
+      operation = opt.operation,
+      code = code,
+      stderr = stderr or {},
+    }))
+  end
+  return query.ok({ stdout = stdout or {}, stderr = stderr or {}, code = code })
+end
+
 ---@param thread thread
 ---@param ok boolean
 ---@param result any
@@ -464,6 +524,26 @@ end
 ---@return vcs.MergeContext?
 function VCSAdapter:get_merge_context()
   oop.abstract_stub()
+end
+
+---@param paths string[]?
+---@param token? vcs.CancellationToken
+---@return vcs.QueryResult
+function VCSAdapter:list_conflicted_files(paths, token) ---@diagnostic disable-line: unused-local
+  local err = self:unsupported(
+    capability_lib.Capability.TRANSACTIONAL_MERGE,
+    "merge.conflicted_files"
+  ) or query.error(
+    query.ErrorKind.UNSUPPORTED,
+    ("Adapter '%s' does not implement merge.conflicted_files"):format(self.config_key or "unknown"),
+    { adapter = self.config_key, operation = "merge.conflicted_files" }
+  )
+  return query.fail(err)
+end
+
+---@return string?
+function VCSAdapter:index_watch_path()
+  return nil
 end
 
 ---@param range? { [1]: integer, [2]: integer }
@@ -548,7 +628,7 @@ end
 ---resolution off this.
 ---@return boolean
 function VCSAdapter:has_staging()
-  return true
+  return self:supports(capability_lib.Capability.STAGE)
 end
 
 ---Add file(s)
