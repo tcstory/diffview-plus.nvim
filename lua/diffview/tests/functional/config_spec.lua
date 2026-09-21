@@ -50,10 +50,21 @@ describe("diffview.config default keymaps", function()
     for _, group in ipairs({ "file_panel", "file_history_panel" }) do
       local maps = config.defaults.keymaps[group]
       assert.truthy(find_keymap(maps, "<cr>"))
-      assert.truthy(find_keymap(maps, "<2-LeftMouse>"))
+      assert.truthy(find_keymap(maps, "<LeftMouse>"))
       assert.equals("view.action_palette", find_keymap(maps, "?")[3])
       assert.equals(3, #maps)
     end
+  end)
+
+  it("filters activation bindings by interaction mode", function()
+    local original = vim.deepcopy(config.get_config())
+    config.setup({ keymaps = { interaction = "keyboard" } })
+    assert.is_nil(find_keymap(config.get_config().keymaps.file_panel, "<LeftMouse>"))
+    assert.truthy(find_keymap(config.get_config().keymaps.file_panel, "<cr>"))
+    config.setup({ keymaps = { interaction = "mouse" } })
+    assert.truthy(find_keymap(config.get_config().keymaps.file_panel, "<LeftMouse>"))
+    assert.is_nil(find_keymap(config.get_config().keymaps.file_panel, "<cr>"))
+    config.setup(original)
   end)
 
   it("resolves user action IDs through the registry", function()

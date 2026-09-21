@@ -1642,12 +1642,14 @@ keymaps                                         *diffview-config-keymaps*
         `preset` is either `"minimal"` (the default) or `"none"`. Minimal
         installs only activation, close, mouse, and action-palette mappings in
         plugin-owned panel/float buffers. Diff buffers receive no domain
-        mappings.
+        mappings. `interaction` is `"hybrid"` by default; use `"mouse"` or
+        `"keyboard"` to install only that panel activation mechanism.
 
         Bind a stable ActionRegistry ID as the mapping rhs: >lua
 
         keymaps = {
           preset = "minimal",
+          interaction = "hybrid",
           file_panel = {
             { "n", "s", "diff.toggle_stage_entry" },
             { "n", "R", "file.refresh_files" },
@@ -2481,7 +2483,7 @@ k                       Bring the cursor to the previous file entry
                                                 *diffview-maps-select_entry*
 o                       Open the diff for the selected file entry.
 <CR>
-<2-LeftMouse>
+<LeftMouse>
 
                                                 *diffview-maps-toggle_select_entry*
 w                       Toggle file selection for multi-file operations.
@@ -2560,7 +2562,7 @@ k                       Bring the cursor to the previous item.
 
 o                       Open the diff for the selected item.
 <CR>
-<2-LeftMouse>
+<LeftMouse>
 
 <Tab>                   Open the diff for the next item.
 

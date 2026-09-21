@@ -422,6 +422,7 @@ function Panel:open()
 end
 
 function Panel:close()
+  require("diffview.ui.router").unregister_owner(self)
   if self._win_resized_au then
     api.nvim_del_autocmd(self._win_resized_au)
     self._win_resized_au = nil
@@ -575,7 +576,13 @@ function Panel:apply_keymaps(keymap_key, extra_defaults)
     vim.tbl_extend("force", { silent = true, buffer = self.bufid }, extra_defaults or {})
   for _, mapping in ipairs(conf.keymaps[keymap_key]) do
     local opt = vim.tbl_extend("force", default_opt, mapping[4] or {}, { buffer = self.bufid })
-    vim.keymap.set(mapping[1], mapping[2], mapping[3], opt)
+    local rhs = mapping[3]
+    if mapping[2] == "<cr>" then
+      rhs = require("diffview.ui.router").callback("keyboard", self.bufid, mapping[5])
+    elseif mapping[2] == "<LeftMouse>" then
+      rhs = require("diffview.ui.router").callback("mouse", self.bufid, mapping[5])
+    end
+    vim.keymap.set(mapping[1], mapping[2], rhs, opt)
   end
   return conf
 end
@@ -594,6 +601,22 @@ function Panel:redraw()
   end
   perf:reset()
   renderer.render(self.bufid, self.render_data)
+  local router = require("diffview.ui.router")
+  router.unregister_owner(self)
+  local function register_component(component)
+    local action = component.context and component.context.action
+    if action and component:isleaf() then
+      for line = component.lstart + 1, component.lend do
+        router.register({ owner = self, action = action, bufnr = self.bufid, line = line })
+      end
+    end
+    for _, child in ipairs(component.components or {}) do
+      register_component(child)
+    end
+  end
+  for _, component in ipairs(self.render_data.components or {}) do
+    register_component(component)
+  end
   perf:time()
   logger:lvl(10):debug(perf)
 

@@ -284,6 +284,9 @@ end
 ---@field hl renderer.HlList
 ---@field components RenderComponent[]
 ---@field namespace integer
+---@field rendered_lines string[]
+---@field rendered_hl table<integer, renderer.HlData[]>
+---@field last_patch? { start_row: integer, old_end_row: integer, new_end_row: integer, lines_written: integer, extmarks_written: integer }
 local RenderData = oop.create_class("RenderData")
 
 ---RenderData constructor.
@@ -292,6 +295,8 @@ function RenderData:init(ns_name)
   self.hl = {}
   self.components = {}
   self.namespace = api.nvim_create_namespace(ns_name)
+  self.rendered_lines = {}
+  self.rendered_hl = {}
 end
 
 ---Create and add a new component.
@@ -358,6 +363,8 @@ function RenderData:destroy()
     c:destroy()
   end
   self.components = {}
+  self.rendered_lines = {}
+  self.rendered_hl = {}
 end
 
 function M.destroy_comp_struct(schema)
@@ -508,19 +515,84 @@ function M.render(bufid, data)
     hl_data = { data.hl }
   end
 
-  api.nvim_buf_set_lines(bufid, 0, -1, false, lines)
-  api.nvim_buf_clear_namespace(bufid, data.namespace, 0, -1)
+  local highlights = {}
   for _, t in ipairs(hl_data) do
     for _, hl in ipairs(t) do
-      api.nvim_buf_set_extmark(
-        bufid,
-        data.namespace,
-        hl.line_idx + (t.offset or 0),
-        hl.first,
-        { end_col = hl.last, hl_group = hl.group }
-      )
+      local row = hl.line_idx + (t.offset or 0)
+      highlights[row] = highlights[row] or {}
+      highlights[row][#highlights[row] + 1] = {
+        group = hl.group,
+        line_idx = row,
+        first = hl.first,
+        last = hl.last,
+      }
     end
   end
+
+  local old_lines = data.rendered_lines or {}
+  local prefix = 0
+  while prefix < #old_lines and prefix < #lines and old_lines[prefix + 1] == lines[prefix + 1] do
+    prefix = prefix + 1
+  end
+  local suffix = 0
+  while
+    suffix < #old_lines - prefix
+    and suffix < #lines - prefix
+    and old_lines[#old_lines - suffix] == lines[#lines - suffix]
+  do
+    suffix = suffix + 1
+  end
+
+  local old_end = #old_lines - suffix
+  local new_end = #lines - suffix
+  local line_changed = old_end > prefix or new_end > prefix
+  local dirty_start, dirty_old_end, dirty_new_end
+  if line_changed then
+    dirty_start, dirty_old_end, dirty_new_end = prefix, old_end, new_end
+  else
+    local max_rows = math.max(#old_lines, #lines)
+    for row = 0, max_rows - 1 do
+      if not vim.deep_equal(data.rendered_hl[row] or {}, highlights[row] or {}) then
+        dirty_start = dirty_start and math.min(dirty_start, row) or row
+        dirty_old_end = math.max(dirty_old_end or 0, row + 1)
+        dirty_new_end = math.max(dirty_new_end or 0, row + 1)
+      end
+    end
+  end
+
+  local extmarks_written = 0
+  if dirty_start then
+    api.nvim_buf_clear_namespace(bufid, data.namespace, dirty_start, dirty_old_end)
+    if line_changed then
+      local replacement = {}
+      for index = dirty_start + 1, dirty_new_end do
+        replacement[#replacement + 1] = lines[index]
+      end
+      api.nvim_buf_set_lines(bufid, dirty_start, dirty_old_end, false, replacement)
+    end
+    for row = dirty_start, dirty_new_end - 1 do
+      for _, hl in ipairs(highlights[row] or {}) do
+        api.nvim_buf_set_extmark(
+          bufid,
+          data.namespace,
+          row,
+          hl.first,
+          { end_col = hl.last, hl_group = hl.group }
+        )
+        extmarks_written = extmarks_written + 1
+      end
+    end
+  end
+
+  data.last_patch = {
+    start_row = dirty_start or 0,
+    old_end_row = dirty_old_end or 0,
+    new_end_row = dirty_new_end or 0,
+    lines_written = line_changed and (dirty_new_end - dirty_start) or 0,
+    extmarks_written = extmarks_written,
+  }
+  data.rendered_lines = vim.deepcopy(lines)
+  data.rendered_hl = vim.deepcopy(highlights)
 
   vim.bo[bufid].modifiable = was_modifiable
   M.last_draw_time = (vim.uv.hrtime() - last) / 1000000

@@ -7,7 +7,7 @@ local M = {}
 
 ---@type fun(prompt: string): boolean
 local handler = function(prompt)
-  return vim.fn.confirm(prompt, "&Cancel\n&Continue", 1, "Warning") == 2
+  return require("diffview.ui.confirm_dialog").ask(prompt)
 end
 
 ---@param prompt string
@@ -20,7 +20,7 @@ end
 function M._set_handler(replacement)
   handler = replacement
     or function(prompt)
-      return vim.fn.confirm(prompt, "&Cancel\n&Continue", 1, "Warning") == 2
+      return require("diffview.ui.confirm_dialog").ask(prompt)
     end
 end
 

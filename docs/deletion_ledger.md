@@ -119,12 +119,12 @@ deletion is expected.
 
 | Field | Value |
 |-------|-------|
-| **Status** | 🔴 Scheduled |
-| **Files** | Any module that writes `_G["DiffviewButton_*"]` or equivalent |
+| **Status** | ✅ Replaced — one namespaced router callback remains |
+| **Files** | `lua/diffview/scene/views/diff/merge_view.lua`, `lua/diffview/ui/router.lua` |
 | **Reason** | Each button using a unique global function name pollutes `_G`, cannot be garbage-collected before the UI is destroyed, and makes it impossible to audit dangling callbacks. |
 | **Replacement** | Single namespaced `UIRouter` global; all components register with `component_id` |
 | **Phase** | 4 |
-| **Deleted in** | — |
+| **Deleted in** | Phase 4 completion commit |
 
 ---
 

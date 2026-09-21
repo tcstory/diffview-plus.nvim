@@ -183,6 +183,7 @@ DEFAULT CONFIG                                  *diffview.defaults*
     hooks = {},         -- See |diffview-config-hooks|
     keymaps = {
       preset = "minimal", -- "minimal" or "none"
+      interaction = "hybrid", -- "mouse", "hybrid", or "keyboard"
       view = {},
       diff1 = {},
       diff1_inline = {},
@@ -191,12 +192,12 @@ DEFAULT CONFIG                                  *diffview.defaults*
       diff4 = {},
       file_panel = {
         { "n", "<cr>", "navigation.select_entry" },
-        { "n", "<2-LeftMouse>", "navigation.select_entry" },
+        { "n", "<LeftMouse>", "navigation.select_entry" },
         { "n", "?", "view.action_palette" },
       },
       file_history_panel = {
         { "n", "<cr>", "navigation.select_entry" },
-        { "n", "<2-LeftMouse>", "navigation.select_entry" },
+        { "n", "<LeftMouse>", "navigation.select_entry" },
         { "n", "?", "view.action_palette" },
       },
       option_panel = {

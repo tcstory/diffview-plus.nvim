@@ -168,6 +168,7 @@ require("diffview").setup({
   hooks = {},   -- See :h diffview-config-hooks
   keymaps = {
     preset = "minimal", -- "minimal" or "none"
+    interaction = "hybrid", -- "mouse", "hybrid", or "keyboard"
     file_panel = {
       { "n", "s", "diff.toggle_stage_entry" },
     },

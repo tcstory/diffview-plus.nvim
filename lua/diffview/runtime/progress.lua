@@ -23,6 +23,8 @@
 ---   pattern so callers do not need to know about the `nvim_echo` opts table.
 
 local M = {}
+local overlay = require("diffview.ui.progress_overlay")
+local current
 
 --- Show a progress message in the command-line area.
 ---
@@ -41,11 +43,13 @@ function M.show(msg, kind)
   --   chunks: list of [text, hl_group] pairs
   --   history: false → do not add to message history
   --   opts.kind: "progress" → ephemeral status-line message
-  vim.api.nvim_echo(
-    { { msg, "Comment" } },
-    false, -- do not add to :messages
-    { kind = kind or "progress" }
-  )
+  if kind and kind ~= "progress" then
+    vim.api.nvim_echo({ { msg, "Comment" } }, false, { kind = kind })
+  elseif current then
+    overlay.update(current, msg)
+  else
+    current = overlay.show(msg)
+  end
 end
 
 --- Clear the current progress message.
@@ -53,7 +57,10 @@ end
 --- Sends an empty progress message, which blanks the command-line area.
 --- Safe to call even if no progress message was previously shown.
 function M.clear()
-  vim.api.nvim_echo({}, false, { kind = "progress" })
+  if current then
+    overlay.finish(current)
+  end
+  current = nil
 end
 
 --- Show `msg`, then call `fn()`, then clear the message.

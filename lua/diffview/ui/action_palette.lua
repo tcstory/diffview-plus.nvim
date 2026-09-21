@@ -2,12 +2,31 @@
 
 local registry = require("diffview.runtime.action_registry")
 local utils = require("diffview.utils")
+local component = require("diffview.ui.component")
 
 local M = {}
 
 ---@param view? any
+---@return diffview.Component
+function M.component(view)
+  local children = {}
+  for _, spec in ipairs(registry.list()) do
+    local available, reason = registry.availability(spec.id, view)
+    children[#children + 1] = component.new({
+      identity = "action-" .. spec.id,
+      text = spec.label,
+      action = spec.id,
+      disabled = not available,
+      tooltip = available and spec.desc or (reason or "Unavailable in this context"),
+    })
+  end
+  return component.new({ identity = "action-palette", children = children })
+end
+
+---@param view? any
 function M.open(view)
   view = view or require("diffview.lib").get_current_view()
+  M.component(view)
   local items = registry.list()
   vim.ui.select(items, {
     prompt = "Diffview actions",

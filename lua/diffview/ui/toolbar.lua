@@ -1,6 +1,7 @@
 ---Registry-backed toolbar model. Rendering and mouse routing belong to Phase 4.
 
 local registry = require("diffview.runtime.action_registry")
+local component = require("diffview.ui.component")
 
 local M = {}
 
@@ -26,6 +27,23 @@ function M.build(action_ids, view)
     }
   end
   return items
+end
+
+---@param action_ids string[]
+---@param view? any
+---@return diffview.Component
+function M.component(action_ids, view)
+  local children = {}
+  for _, item in ipairs(M.build(action_ids, view)) do
+    children[#children + 1] = component.new({
+      identity = "toolbar-" .. item.id,
+      text = "[ " .. item.label .. " ]",
+      action = item.id,
+      disabled = item.disabled,
+      tooltip = item.tooltip,
+    })
+  end
+  return component.new({ identity = "toolbar", children = children })
 end
 
 return M

@@ -451,15 +451,15 @@ require("diffview").setup({
 
 ### Phase 4：UI component、Renderer 与 Router
 
-- [ ] 定义 immutable component schema：text、hl、action、disabled、tooltip、identity。
-- [ ] Renderer 使用 buffer line diff + extmark patch，避免每次全 buffer 重画。
-- [ ] 建立唯一 UIRouter，处理 `<CR>`、鼠标、winbar click zone。
-- [ ] 删除每按钮 `_G` callback；若 ABI 需要，只保留一个 namespaced router callback。
-- [ ] 实现 ActionPalette、ConfirmDialog、Toolbar、ProgressOverlay。
-- [ ] panel 支持 mouse/hybrid/keyboard interaction mode。
-- [ ] 为窄窗口、双宽字符、combining char、RTL 文件名建立命中测试。
-- [ ] decoration provider 仅用于可重建的 viewport decoration，并使用 0.12 `on_range`。
-- [ ] 提供一个最小 UI component 示例，逐步展示 buffer、window、extmark、action ID 与鼠标命中的关系。
+- [x] 定义 immutable component schema：text、hl、action、disabled、tooltip、identity。
+- [x] Renderer 使用 buffer line diff + extmark patch，避免每次全 buffer 重画。
+- [x] 建立唯一 UIRouter，处理 `<CR>`、鼠标、winbar click zone。
+- [x] 删除每按钮 `_G` callback；若 ABI 需要，只保留一个 namespaced router callback。
+- [x] 实现 ActionPalette、ConfirmDialog、Toolbar、ProgressOverlay。
+- [x] panel 支持 mouse/hybrid/keyboard interaction mode。
+- [x] 为窄窗口、双宽字符、combining char、RTL 文件名建立命中测试。
+- [x] decoration provider 仅用于可重建的 viewport decoration，并使用 0.12 `on_range`。
+- [x] 提供一个最小 UI component 示例，逐步展示 buffer、window、extmark、action ID 与鼠标命中的关系。
 
 验收：点击命中测试无 screenrow 特例散落；UI 销毁后 registry 为空；1000 行 panel 局部更新满足性能基线。
 

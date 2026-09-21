@@ -10,6 +10,7 @@ local RevType = lazy.access("diffview.vcs.rev", "RevType") ---@type RevType|Lazy
 local StandardView = lazy.access("diffview.scene.views.standard.standard_view", "StandardView") ---@type StandardView|LazyModule
 local View = lazy.access("diffview.scene.view", "View") ---@type View|LazyModule
 local utils = lazy.require("diffview.utils") ---@module "diffview.utils"
+local router = require("diffview.ui.router")
 
 local api = vim.api
 
@@ -169,160 +170,82 @@ function MergeView:attach_result_entry(entry)
 end
 
 function MergeView:_install_click_handlers()
-  local bufs = {}
-  if self.panel and self.panel.bufnr and api.nvim_buf_is_valid(self.panel.bufnr) then
-    table.insert(bufs, self.panel.bufnr)
-  end
-  if self.cur_layout then
-    for _, sym in ipairs({ "a", "b", "c", "d" }) do
-      local win = self.cur_layout[sym]
-      if win and win.file and win.file.bufnr and api.nvim_buf_is_valid(win.file.bufnr) then
-        table.insert(bufs, win.file.bufnr)
-      end
-    end
-  end
-
-  for _, bufnr in ipairs(bufs) do
-    -- Conflict navigation is installed through the normal configurable
-    -- keymap groups. Only the single-click interception is MergeView-specific;
-    -- leaving multi-click mappings alone preserves the panel's double-click
-    -- action and user mappings.
-    vim.keymap.set("n", "<LeftMouse>", function()
-      if self:_handle_left_mouse() then
-        return ""
-      end
-      return "<LeftMouse>"
-    end, { buffer = bufnr, silent = true, nowait = true, expr = true })
-  end
-end
-
-function MergeView:_handle_left_mouse()
-  local mouse = vim.fn.getmousepos()
-  if mouse.line <= 0 or mouse.column <= 0 or mouse.winid <= 0 then
-    return false
-  end
-
-  local cur_main = self.cur_layout and self.cur_layout:get_main_win()
-  local result_win = cur_main and cur_main.id
+  router.unregister_owner(self)
   local entry = self.cur_entry
-
-  if result_win and mouse.winid == result_win and entry then
-    local current = self.merge_session:get(entry.path)
-    if current then
-      local conflict_on_line
-      for _, c in ipairs(current.conflicts) do
-        local s_row = self.merge_session:_range(current, c)
-        if s_row + 1 == mouse.line then
-          conflict_on_line = c
-          break
-        end
-      end
-
-      if conflict_on_line then
-        local sp = vim.fn.screenpos(result_win, mouse.line, 1)
-        local is_virt_line = true
-        if sp and sp.row > 0 and mouse.screenrow then
-          is_virt_line = mouse.screenrow < sp.row
-        end
-
-        if is_virt_line then
-          local wininfo = vim.fn.getwininfo(result_win)[1]
-          local offset = mouse.wincol - (wininfo and wininfo.textoff or 0)
-
-          if offset > 0 then
-            local status_str = conflict_on_line.resolved
-                and (" ✔ %s "):format(conflict_on_line.choice or "manual")
-              or (" Unresolved %d "):format(conflict_on_line.id)
-            local prefix_w = vim.fn.strdisplaywidth(status_str)
-            local ours_str = conflict_on_line.resolved
-                and conflict_on_line.choice == "ours"
-                and "[ ✔ OURS ]"
-              or "[ OURS ]"
-            local ours_w = vim.fn.strdisplaywidth(ours_str)
-            local theirs_str = conflict_on_line.resolved
-                and conflict_on_line.choice == "theirs"
-                and "[ ✔ THEIRS ]"
-              or "[ THEIRS ]"
-            local theirs_w = vim.fn.strdisplaywidth(theirs_str)
-
-            local ours_start = prefix_w + 1
-            local ours_end = ours_start + ours_w
-            local theirs_start = ours_end + 1
-            local theirs_end = theirs_start + theirs_w
-
-            local function do_choose(choice)
-              vim.schedule(function()
-                if self.closing:check() then
-                  return
-                end
-                local session_entry = self.merge_session:get(entry.path)
-                if
-                  session_entry ~= current
-                  or not session_entry.bufnr
-                  or not api.nvim_buf_is_valid(session_entry.bufnr)
-                then
-                  return
-                end
-                local ok, err = pcall(
-                  self.merge_session.choose,
-                  self.merge_session,
-                  entry.path,
-                  conflict_on_line,
-                  choice
-                )
-                if not ok then
-                  utils.err("Unable to update merge conflict: " .. tostring(err))
-                  return
-                end
-                if self.cur_entry == entry and self.cur_layout then
-                  pcall(self.cur_layout.sync_scroll, self.cur_layout)
-                end
-              end)
-            end
-
-            if offset >= ours_start and offset <= ours_end + 1 then
-              do_choose("ours")
-              return true
-            elseif offset > ours_end + 1 and offset <= theirs_end + 2 then
-              do_choose("theirs")
-              return true
-            else
-              return true
-            end
-          end
-        end
-      end
-    end
+  local current = entry and self.merge_session:get(entry.path)
+  if not (current and current.bufnr and api.nvim_buf_is_valid(current.bufnr)) then
+    return
   end
 
-  return false
+  vim.keymap.set("n", "<LeftMouse>", router.callback("mouse", current.bufnr), {
+    buffer = current.bufnr,
+    silent = true,
+    nowait = true,
+  })
+  for _, conflict in ipairs(current.conflicts) do
+    local start_row = self.merge_session:_range(current, conflict)
+    local status = conflict.resolved and (" ✔ %s "):format(conflict.choice or "manual")
+      or (" Unresolved %d "):format(conflict.id)
+    local ours = conflict.resolved and conflict.choice == "ours" and "[ ✔ OURS ]" or "[ OURS ]"
+    local theirs = conflict.resolved and conflict.choice == "theirs" and "[ ✔ THEIRS ]"
+      or "[ THEIRS ]"
+    local spans = router.segment_spans({
+      { text = status },
+      { text = " " },
+      { text = ours },
+      { text = " " },
+      { text = theirs },
+    })
+    for index, action in pairs({ [3] = "merge.choose_ours", [5] = "merge.choose_theirs" }) do
+      router.register({
+        owner = self,
+        action = action,
+        bufnr = current.bufnr,
+        line = start_row + 1,
+        cursor_line = start_row + 1,
+        start_col = spans[index].start_col,
+        end_col = spans[index].end_col,
+        virtual = true,
+      })
+    end
+  end
 end
 
 function MergeView:update_merge_ui()
+  router.unregister_owner(self._winbar_routes)
+  self._winbar_routes = {}
   local unresolved, total = self.merge_session:counts()
   if self.panel:is_open() and self.panel.winid and api.nvim_win_is_valid(self.panel.winid) then
     local label = self.panel_collapsed and "[ ▶ ]" or "[ ◀ ] Hide files"
-    vim.wo[self.panel.winid].winbar = ("%%#DiffviewFilePanelTitle#%%@v:lua.DiffviewMergePanelClick@%s%%X%%*"):format(
-      label
-    )
+    local id = router.register({
+      owner = self._winbar_routes,
+      handler = function()
+        self:toggle_file_panel_width()
+      end,
+    })
+    vim.wo[self.panel.winid].winbar = router.winbar(id, label, "DiffviewFilePanelTitle")
   end
   local entry = self.cur_entry
   if entry and entry.layout and entry.layout.b then
     local current = assert(self.merge_session:get(entry.path))
     local file_remaining = self.merge_session:entry_remaining(current)
     local file_total = #current.conflicts
-    local nav_buttons =
-      "%%@v:lua.DiffviewMergePrevConflictClick@[ ◀ ]%%X %%@v:lua.DiffviewMergeNextConflictClick@[ ▶ ]%%X"
+    local prev =
+      router.register({ owner = self._winbar_routes, action = "navigation.prev_conflict" })
+    local next =
+      router.register({ owner = self._winbar_routes, action = "navigation.next_conflict" })
+    local apply = router.register({ owner = self._winbar_routes, action = "merge.merge_apply" })
+    local nav_buttons = router.winbar(prev, "[ ◀ ]") .. " " .. router.winbar(next, "[ ▶ ]")
     local apply_label = unresolved == 0
-        and "%%#DiffviewFilePanelInsertions#%%@v:lua.DiffviewMergeApplyClick@[ ✔ APPLY CHANGES ]%%X%%*"
-      or "%%@v:lua.DiffviewMergeApplyClick@[ APPLY ]%%X"
-    entry.layout.b.file.winbar = (
-      "RESULT  "
-      .. nav_buttons
-      .. "  "
-      .. apply_label
-      .. "  %%<FILE %d/%d unresolved | ALL %d/%d"
-    ):format(file_remaining, file_total, unresolved, total)
+        and router.winbar(apply, "[ ✔ APPLY CHANGES ]", "DiffviewFilePanelInsertions")
+      or router.winbar(apply, "[ APPLY ]")
+    local counts = ("  %%<FILE %d/%d unresolved | ALL %d/%d"):format(
+      file_remaining,
+      file_total,
+      unresolved,
+      total
+    )
+    entry.layout.b.file.winbar = "RESULT  " .. nav_buttons .. "  " .. apply_label .. counts
     if self.cur_layout and self.cur_layout.b and self.cur_layout.b.file then
       self.cur_layout.b.file.winbar = entry.layout.b.file.winbar
     end
@@ -331,8 +254,19 @@ function MergeView:update_merge_ui()
       vim.wo[winid].winbar = entry.layout.b.file.winbar
     end
   end
+  self:_install_click_handlers()
   self.panel:render()
   self.panel:redraw()
+end
+
+---@override
+function MergeView:close(opts)
+  local closed = MergeView.super_class.close(self, opts)
+  if closed ~= false then
+    router.unregister_owner(self)
+    router.unregister_owner(self._winbar_routes)
+  end
+  return closed
 end
 
 function MergeView:_equalize_diff_windows()
@@ -481,34 +415,6 @@ function MergeView:can_close(opts)
     "Merge results have not been applied. Click [ Apply Changes ] or use :DiffviewClose! to discard them."
   )
   return false
-end
-
-_G.DiffviewMergeApplyClick = function()
-  local view = require("diffview.lib").get_current_view()
-  return require("diffview.runtime.action_registry").execute("merge.merge_apply", view)
-end
-
-_G.DiffviewMergePanelClick = function()
-  local view = require("diffview.lib").get_current_view()
-  if view and view.merge_session and view.toggle_file_panel_width then
-    view:toggle_file_panel_width()
-  end
-end
-
-_G.DiffviewMergePrevConflictClick = function(...)
-  local view = require("diffview.lib").get_current_view()
-  local res =
-    require("diffview.runtime.action_registry").execute("navigation.prev_conflict", view, ...)
-  pcall(vim.cmd, "redraw")
-  return res
-end
-
-_G.DiffviewMergeNextConflictClick = function(...)
-  local view = require("diffview.lib").get_current_view()
-  local res =
-    require("diffview.runtime.action_registry").execute("navigation.next_conflict", view, ...)
-  pcall(vim.cmd, "redraw")
-  return res
 end
 
 M.MergeView = MergeView

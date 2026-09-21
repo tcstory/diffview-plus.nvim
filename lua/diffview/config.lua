@@ -605,6 +605,7 @@ M.defaults = {
 
   ---@class DiffviewKeymapsConfig
   ---@field preset "minimal"|"none"
+  ---@field interaction "mouse"|"hybrid"|"keyboard"
   ---@field view DiffviewKeymapEntry[]
   ---@field diff1 DiffviewKeymapEntry[]
   ---@field diff1_inline DiffviewKeymapEntry[]
@@ -619,6 +620,7 @@ M.defaults = {
 
   ---@class DiffviewKeymapsConfig.user
   ---@field preset? "minimal"|"none"
+  ---@field interaction? "mouse"|"hybrid"|"keyboard"
   ---@field disable_defaults? boolean Deprecated; use `preset = "none"`.
   ---@field view? DiffviewKeymapEntry[]
   ---@field diff1? DiffviewKeymapEntry[]
@@ -634,6 +636,7 @@ M.defaults = {
   -- Tabularize formatting pattern: `\v(\"[^"]{-}\",\ze(\s*)actions)|actions\.\w+(\(.{-}\))?,?|\{\ desc\ \=`
   keymaps = {
     preset = "minimal",
+    interaction = "hybrid",
     view = {},
     diff1 = {},
     diff1_inline = {},
@@ -642,12 +645,12 @@ M.defaults = {
     diff4 = {},
     file_panel = {
       { "n", "<cr>", "navigation.select_entry" },
-      { "n", "<2-LeftMouse>", "navigation.select_entry" },
+      { "n", "<LeftMouse>", "navigation.select_entry" },
       { "n", "?", "view.action_palette" },
     },
     file_history_panel = {
       { "n", "<cr>", "navigation.select_entry" },
-      { "n", "<2-LeftMouse>", "navigation.select_entry" },
+      { "n", "<LeftMouse>", "navigation.select_entry" },
       { "n", "?", "view.action_palette" },
     },
     option_panel = {
@@ -1740,6 +1743,13 @@ function M.setup(user_config)
   validate.enum(c.keymaps, "preset", { "minimal", "none" }, d.keymaps.preset, {
     path = "keymaps.preset",
   })
+  validate.enum(
+    c.keymaps,
+    "interaction",
+    { "mouse", "hybrid", "keyboard" },
+    d.keymaps.interaction,
+    { path = "keymaps.interaction" }
+  )
 
   for _, name in ipairs({ "single_file", "multi_file" }) do
     for _, vcs in ipairs({ "git", "hg", "jj", "p4" }) do
@@ -1762,8 +1772,10 @@ function M.setup(user_config)
   end
 
   local preset = M._config.keymaps.preset
+  local interaction = M._config.keymaps.interaction
   M._config.keymaps = utils.tbl_deep_clone(M.defaults.keymaps)
   M._config.keymaps.preset = preset
+  M._config.keymaps.interaction = interaction
   if preset == "none" then
     for name, keymaps in pairs(M._config.keymaps) do
       if type(keymaps) == "table" then
@@ -1784,8 +1796,14 @@ function M.setup(user_config)
     if type(name) == "string" and type(keymaps) == "table" then
       for i = #keymaps, 1, -1 do
         local v = keymaps[i]
-        if type(v) == "table" and not v[3] then
-          table.remove(keymaps, i)
+        if type(v) == "table" then
+          local lhs = v[2]
+          local remove = not v[3]
+            or (interaction == "keyboard" and lhs == "<LeftMouse>")
+            or (interaction == "mouse" and lhs == "<cr>")
+          if remove then
+            table.remove(keymaps, i)
+          end
         end
       end
       M._config.keymaps[name] = require("diffview.runtime.keymaps").resolve_all(keymaps)

@@ -6,8 +6,14 @@ local Diff4Mixed = require("diffview.scene.layouts.diff_4_mixed").Diff4Mixed
 local MergeView = require("diffview.scene.views.diff.merge_view").MergeView
 local RevType = require("diffview.vcs.rev").RevType
 local vcs = require("diffview.vcs")
+local router = require("diffview.ui.router")
 
 local eq = helpers.eq
+
+local function route_id(winbar, label)
+  local escaped = vim.pesc(label)
+  return tonumber(assert(winbar:match("%%(%d+)@v:lua%.DiffviewUIRouter@" .. escaped)))
+end
 
 local function make_conflict_repo()
   local repo = helpers.init_repo()
@@ -38,6 +44,8 @@ describe("diffview.scene.views.diff.merge_view", function()
       view:close({ force = true })
     end
     require("diffview.lib").dispose_view(view)
+    assert.equals(0, router.size())
+    router._reset()
     config.setup(original_config)
     if repo then
       helpers.cleanup_repo(repo)
@@ -115,17 +123,16 @@ describe("diffview.scene.views.diff.merge_view", function()
       assert.is_nil(result_file.winbar:find("DiffviewMergePanelClick", 1, true))
       assert.truthy(result_file.winbar:find("[ ◀ ]", 1, true))
       assert.truthy(result_file.winbar:find("[ ▶ ]", 1, true))
-      assert.truthy(result_file.winbar:find("DiffviewMergePrevConflictClick", 1, true))
-      assert.truthy(result_file.winbar:find("DiffviewMergeNextConflictClick", 1, true))
+      assert.truthy(result_file.winbar:find("v:lua.DiffviewUIRouter", 1, true))
       local apply_at = assert(result_file.winbar:find("[ APPLY ]", 1, true))
       local counts_at = assert(result_file.winbar:find("FILE 1/1 unresolved | ALL 1/1", 1, true))
       assert.is_true(apply_at < counts_at)
       eq(1, view.cur_entry.merge_conflicts_remaining)
 
       -- Test clicking [ ▶ ] and [ ◀ ] winbar buttons
-      local next_res = _G.DiffviewMergeNextConflictClick()
+      local next_res = router.dispatch_id(route_id(result_file.winbar, "[ ▶ ]"))
       eq(1, next_res and next_res.current)
-      local prev_res = _G.DiffviewMergePrevConflictClick()
+      local prev_res = router.dispatch_id(route_id(result_file.winbar, "[ ◀ ]"))
       eq(1, prev_res and prev_res.current)
 
       assert.is_nil(result_file.winbar:find("[ OURS ]", 1, true))
@@ -136,7 +143,7 @@ describe("diffview.scene.views.diff.merge_view", function()
       local wb_before = vim.api.nvim_win_get_width(view.cur_layout.b.id)
       local wc_before = vim.api.nvim_win_get_width(view.cur_layout.c.id)
 
-      _G.DiffviewMergePanelClick()
+      router.dispatch_id(route_id(vim.wo[view.panel.winid].winbar, "[ ◀ ] Hide files"))
       assert.is_true(view.panel:is_open())
       eq(5, vim.api.nvim_win_get_width(view.panel.winid))
       assert.truthy(vim.wo[view.panel.winid].winbar:find("[ ▶ ]", 1, true))
@@ -150,7 +157,7 @@ describe("diffview.scene.views.diff.merge_view", function()
       assert.is_true(math.abs(wa_after - wb_after) <= 2)
       assert.is_true(math.abs(wb_after - wc_after) <= 2)
 
-      _G.DiffviewMergePanelClick()
+      router.dispatch_id(route_id(vim.wo[view.panel.winid].winbar, "[ ▶ ]"))
       assert.is_true(view.panel:is_open())
       eq(expanded_width, vim.api.nvim_win_get_width(view.panel.winid))
       assert.truthy(vim.wo[view.panel.winid].winbar:find("[ ◀ ] Hide files", 1, true))
@@ -209,7 +216,7 @@ describe("diffview.scene.views.diff.merge_view", function()
             screenrow = sp.row, -- on the code line, NOT the virtual line
           }
         end
-        local handled = view:_handle_left_mouse()
+        local handled = router.dispatch_buffer("mouse", session_entry.bufnr)
         eq(false, conflict.resolved)
         eq(nil, conflict.choice)
         eq(false, handled or false)
@@ -228,7 +235,7 @@ describe("diffview.scene.views.diff.merge_view", function()
         }
       end
 
-      local handled_ours = view:_handle_left_mouse()
+      local handled_ours = router.dispatch_buffer("mouse", session_entry.bufnr)
       vim.fn.getmousepos = orig_getmousepos
 
       eq(true, handled_ours)
@@ -252,7 +259,7 @@ describe("diffview.scene.views.diff.merge_view", function()
         }
       end
 
-      local handled_theirs = view:_handle_left_mouse()
+      local handled_theirs = router.dispatch_buffer("mouse", session_entry.bufnr)
       vim.fn.getmousepos = orig_getmousepos
 
       eq(true, handled_theirs)

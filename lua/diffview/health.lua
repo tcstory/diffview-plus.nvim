@@ -26,6 +26,7 @@ function M.check()
   local config = require("diffview.config").get_config()
   health.start("Checking interaction configuration")
   health.ok(fmt("Keymap preset: %s", config.keymaps.preset))
+  health.ok(fmt("Panel interaction: %s", config.keymaps.interaction))
   health.info(fmt("Registered actions: %d", #require("diffview.api.actions").list()))
 
   health.start("Checking icon provider")
