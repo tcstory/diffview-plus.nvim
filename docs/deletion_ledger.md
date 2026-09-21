@@ -93,23 +93,23 @@ deletion is expected.
 
 | Field | Value |
 |-------|-------|
-| **Status** | 🟡 In progress — ActionRegistry created; keymap wiring pending |
+| **Status** | ✅ Replaced — minimal/none presets and action-ID wiring active |
 | **Files** | `lua/diffview/config.lua` (approx. lines with `keymaps.*` table entries) |
 | **Reason** | The same action is declared separately for each layout, leading to duplication and divergence.  The refactor uses a single `ActionRegistry` entry per action; keymaps reference the action ID. |
-| **Replacement** | `lua/diffview/runtime/action_registry.lua`; 58 actions registered; keymap migration to action IDs in Phase 3 continuation |
+| **Replacement** | `lua/diffview/runtime/action_registry.lua`; all built-ins, factory variants and UI surfaces use action IDs |
 | **Phase** | 3 |
-| **Deleted in** | — |
+| **Deleted in** | Working tree (Phase 3 completion; commit pending) |
 
 ### Monolithic `actions.lua` (~1300 lines)
 
 | Field | Value |
 |-------|-------|
-| **Status** | 🔴 Scheduled |
+| **Status** | ✅ Split into domain declaration modules |
 | **Files** | `lua/diffview/actions.lua` |
 | **Reason** | All actions in one file with no separation of concerns.  Splitting into domain modules (diff, history, merge, navigation, layout, file) makes each action's preconditions, side effects and tests self-contained. |
-| **Replacement** | `lua/diffview/actions/diff.lua`, `history.lua`, `merge.lua`, etc. |
+| **Replacement** | `lua/diffview/actions/{diff,history,merge,navigation,layout,file,view}.lua`; `actions.lua` is a compatibility facade |
 | **Phase** | 3 |
-| **Deleted in** | — |
+| **Deleted in** | Working tree (Phase 3 completion; commit pending) |
 
 ---
 

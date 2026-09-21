@@ -1,6 +1,6 @@
 # diffview-plus.nvim 现代化重构设计与任务清单
 
-> 状态：设计完成，等待批准实施  
+> 状态：实施中；Phase 3 已完成，下一阶段为 Phase 4
 > 编写日期：2026-09-18  
 > 目标基线：Neovim 0.12.x（本机验证版本为 0.12.4）  
 > 原则：稳定 API 优先、UI 优先、少快捷键、教学可读、删除无价值代码、可分阶段迁移、每阶段可独立验收和回滚
@@ -439,13 +439,13 @@ require("diffview").setup({
 
 ### Phase 3：ActionRegistry 与 minimal keymaps
 
-- [ ] 建立稳定 action ID、metadata、availability 和 execute contract。
-- [ ] 把 `actions.lua` 拆为 diff/history/merge/navigation/layout/file 模块。
-- [ ] toolbar、palette、help 和用户自定义 keymap API 全部由 registry 生成。
-- [ ] 默认 preset 改为 `minimal`，只保留 UI buffer 的激活/关闭键。
-- [ ] 删除内置 legacy preset；在迁移文档中提供按 action ID 恢复个别映射的示例。
-- [ ] capability 不满足时隐藏/disable action，并展示原因 tooltip。
-- [ ] 危险 action 统一走 confirm service。
+- [x] 建立稳定 action ID、metadata、availability 和 execute contract。
+- [x] 把 `actions.lua` 拆为 diff/history/merge/navigation/layout/file 模块。
+- [x] toolbar、palette、help 和用户自定义 keymap API 全部由 registry 生成。
+- [x] 默认 preset 改为 `minimal`，只保留 UI buffer 的激活/关闭键。
+- [x] 删除内置 legacy preset；在迁移文档中提供按 action ID 恢复个别映射的示例。
+- [x] capability 不满足时隐藏/disable action，并展示原因 tooltip。
+- [x] 危险 action 统一走 confirm service。
 
 验收：新增 action 只需注册一次；默认 diff buffer 不被插件注入领域快捷键；不存在第二份 legacy action/keymap 定义。
 

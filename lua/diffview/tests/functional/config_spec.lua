@@ -38,75 +38,40 @@ describe("diffview.config default keymaps", function()
     return nil
   end
 
-  it("shared nav keymaps appear in view section", function()
+  it("uses the minimal preset and leaves ordinary diff buffers untouched", function()
     local keymaps = config.defaults.keymaps
-    -- <tab> is a common nav keymap that should be in view.
-    assert.truthy(find_keymap(keymaps.view, "<tab>"))
-    assert.truthy(find_keymap(keymaps.view, "gf"))
-    assert.truthy(find_keymap(keymaps.view, "<leader>e"))
-  end)
-
-  it("shared nav keymaps appear in file_panel section", function()
-    local keymaps = config.defaults.keymaps
-    assert.truthy(find_keymap(keymaps.file_panel, "<tab>"))
-    assert.truthy(find_keymap(keymaps.file_panel, "gf"))
-    assert.truthy(find_keymap(keymaps.file_panel, "<leader>b"))
-  end)
-
-  it("shared nav keymaps appear in file_history_panel section", function()
-    local keymaps = config.defaults.keymaps
-    assert.truthy(find_keymap(keymaps.file_history_panel, "<tab>"))
-    assert.truthy(find_keymap(keymaps.file_history_panel, "gf"))
-    assert.truthy(find_keymap(keymaps.file_history_panel, "<leader>e"))
-  end)
-
-  it("shared panel keymaps appear in both panel sections", function()
-    local keymaps = config.defaults.keymaps
-    -- j, <cr>, zo are common panel keymaps.
-    for _, lhs in ipairs({ "j", "<cr>", "zo", "zM" }) do
-      assert.truthy(find_keymap(keymaps.file_panel, lhs), "file_panel missing " .. lhs)
-      assert.truthy(
-        find_keymap(keymaps.file_history_panel, lhs),
-        "file_history_panel missing " .. lhs
-      )
+    assert.equals("minimal", keymaps.preset)
+    for _, group in ipairs({ "view", "diff1", "diff1_inline", "diff2", "diff3", "diff4" }) do
+      assert.equals(0, #keymaps[group], group .. " must not receive domain mappings")
     end
   end)
 
-  it("section-specific keymaps are not leaked to other sections", function()
-    local keymaps = config.defaults.keymaps
-    -- "s" (stage) is file_panel-only.
-    assert.truthy(find_keymap(keymaps.file_panel, "s"))
-    assert.falsy(find_keymap(keymaps.file_history_panel, "s"))
-
-    -- "H" toggles reviewed-file visibility only in the file panel.
-    local hide_map = find_keymap(keymaps.file_panel, "H")
-    assert.truthy(hide_map)
-    assert.equals(config.actions.toggle_hide_selected, hide_map[3])
-    assert.equals("Toggle hiding reviewed (selected) files", hide_map[4].desc)
-
-    -- "g!" (options) is file_history_panel-only.
-    assert.truthy(find_keymap(keymaps.file_history_panel, "g!"))
-    assert.falsy(find_keymap(keymaps.file_panel, "g!"))
+  it("keeps only activation and palette keys in persistent panels", function()
+    for _, group in ipairs({ "file_panel", "file_history_panel" }) do
+      local maps = config.defaults.keymaps[group]
+      assert.truthy(find_keymap(maps, "<cr>"))
+      assert.truthy(find_keymap(maps, "<2-LeftMouse>"))
+      assert.equals("view.action_palette", find_keymap(maps, "?")[3])
+      assert.equals(3, #maps)
+    end
   end)
 
-  it("allows the hide-reviewed mapping to be changed", function()
+  it("resolves user action IDs through the registry", function()
     local original = vim.deepcopy(config.get_config())
     local ok, err = pcall(function()
       config.setup({
         keymaps = {
           file_panel = {
-            ["H"] = false,
-            { "n", "<leader>h", config.actions.toggle_hide_selected },
+            { "n", "s", "diff.toggle_stage_entry" },
           },
         },
       })
 
       local keymaps = config.get_config().keymaps.file_panel
-      assert.falsy(find_keymap(keymaps, "H"))
-
-      local replacement = find_keymap(keymaps, "<leader>h")
-      assert.truthy(replacement)
-      assert.equals(config.actions.toggle_hide_selected, replacement[3])
+      local mapping = find_keymap(keymaps, "s")
+      assert.is_function(mapping[3])
+      assert.equals("diff.toggle_stage_entry", mapping[5])
+      assert.equals("Stage or unstage the selected entry.", mapping[4].desc)
     end)
 
     config.setup(original)
@@ -115,24 +80,11 @@ describe("diffview.config default keymaps", function()
     end
   end)
 
-  it("conflict keymaps live on the merge-tool layouts, not the view section", function()
-    local keymaps = config.defaults.keymaps
-    -- They should be active in every layout that appears in the default
-    -- `merge_tool` cycle (`diff3`, `diff4`, and `diff1_plain`) and absent
-    -- from the general `view` section.
-    for _, lhs in ipairs({
-      "<leader>co",
-      "<leader>ct",
-      "<leader>cb",
-      "<leader>ca",
-      "dx",
-      "[x",
-      "]x",
-    }) do
-      assert.truthy(find_keymap(keymaps.diff1, lhs), "diff1 missing " .. lhs)
-      assert.truthy(find_keymap(keymaps.diff3, lhs), "diff3 missing " .. lhs)
-      assert.truthy(find_keymap(keymaps.diff4, lhs), "diff4 missing " .. lhs)
-      assert.falsy(find_keymap(keymaps.view, lhs), "view should not contain " .. lhs)
-    end
+  it("the none preset installs only explicit user mappings", function()
+    config.setup({ keymaps = { preset = "none", file_panel = { { "n", "x", "view.close" } } } })
+    local maps = config.get_config().keymaps
+    assert.equals("none", maps.preset)
+    assert.equals(1, #maps.file_panel)
+    assert.equals(0, #maps.file_history_panel)
   end)
 end)

@@ -1,0 +1,17 @@
+local actions = require("diffview.api.actions")
+local toolbar = require("diffview.ui.toolbar")
+
+describe("Phase 3 action surfaces", function()
+  it("publishes built-in actions through the public API", function()
+    assert.truthy(#actions.list() > 70)
+    assert.equals("Actions", actions.get("view.action_palette").label)
+  end)
+
+  it("builds toolbar state from registry metadata and availability", function()
+    local items = toolbar.build({ "navigation.next_entry", "merge.merge_apply" }, {})
+    assert.equals("navigation.next_entry", items[1].id)
+    assert.is_false(items[1].disabled)
+    assert.is_true(items[2].disabled)
+    assert.equals("No merge session is active", items[2].tooltip)
+  end)
+end)

@@ -64,69 +64,9 @@ end
 ---@class DiffviewKeymapEntry
 ---@field [1] string|string[] Mode(s).
 ---@field [2] string Left-hand side.
----@field [3] string|(fun(...): any?)|false Right-hand side; `false` disables the default. Callable may return a `Future` for async actions.
+---@field [3] string|(fun(...): any?)|false Action ID, raw rhs, callback, or `false` to disable.
 ---@field [4]? DiffviewKeymapOpts
-
--- stylua: ignore start
-
--- Keymaps shared across view, file_panel, and file_history_panel.
-local common_nav_keymaps = {
-  { "n", "<tab>",       actions.select_next_entry,   { desc = "Open the diff for the next file" } },
-  { "n", "<s-tab>",     actions.select_prev_entry,   { desc = "Open the diff for the previous file" } },
-  { "n", "[F",          actions.select_first_entry,  { desc = "Open the diff for the first file" } },
-  { "n", "]F",          actions.select_last_entry,   { desc = "Open the diff for the last file" } },
-  { "n", "gf",          actions.goto_file_edit,      { desc = "Open the file in the previous tabpage" } },
-  { "n", "<C-w><C-f>",  actions.goto_file_split,     { desc = "Open the file in a new split" } },
-  { "n", "<C-w>gf",     actions.goto_file_tab,       { desc = "Open the file in a new tabpage" } },
-  { "n", "gx",          actions.open_file_external,  { desc = "Open the file with default system application" } },
-  { "n", "<leader>e",   actions.focus_files,         { desc = "Bring focus to the file panel" } },
-  { "n", "<leader>b",   actions.toggle_files,        { desc = "Toggle the file panel" } },
-}
-
--- Keymaps shared between file_panel and file_history_panel.
-local common_panel_keymaps = {
-  { "n", "j",              actions.next_entry,          { desc = "Bring the cursor to the next file entry" } },
-  { "n", "<down>",         actions.next_entry,          { desc = "Bring the cursor to the next file entry" } },
-  { "n", "k",              actions.prev_entry,          { desc = "Bring the cursor to the previous file entry" } },
-  { "n", "<up>",           actions.prev_entry,          { desc = "Bring the cursor to the previous file entry" } },
-  { "n", "<cr>",           actions.select_entry,        { desc = "Open the diff for the selected entry" } },
-  { "n", "o",              actions.select_entry,        { desc = "Open the diff for the selected entry" } },
-  { "n", "l",              actions.select_entry,        { desc = "Open the diff for the selected entry" } },
-  { "n", "<2-LeftMouse>",  actions.select_entry,        { desc = "Open the diff for the selected entry" } },
-  { "n", "<c-b>",          actions.scroll_view(-0.25),  { desc = "Scroll the view up" } },
-  { "n", "<c-f>",          actions.scroll_view(0.25),   { desc = "Scroll the view down" } },
-  { "n", "zo",             actions.open_fold,           { desc = "Expand fold" } },
-  { "n", "h",              actions.close_fold,          { desc = "Collapse fold" } },
-  { "n", "zc",             actions.close_fold,          { desc = "Collapse fold" } },
-  { "n", "za",             actions.toggle_fold,         { desc = "Toggle fold" } },
-  { "n", "zR",             actions.open_all_folds,      { desc = "Expand all folds" } },
-  { "n", "zM",             actions.close_all_folds,     { desc = "Collapse all folds" } },
-}
-
--- Conflict-resolution keymaps spliced into the `keymaps.diff1`/`diff3`/`diff4`
--- groups below, covering every layout in the default `merge_tool` cycle.
--- `keymaps.diff1` applies to all `Diff1` layouts except `diff1_inline`, which
--- has its own keymap group. These operate on conflict markers in the local
--- buffer, so they only make sense when a merge is in progress.
-local conflict_keymaps = {
-  { "n", "[x",          actions.prev_conflict,                  { desc = "Jump to the previous conflict marker" } },
-  { "n", "]x",          actions.next_conflict,                  { desc = "Jump to the next conflict marker" } },
-  { "n", "<leader>co",  actions.conflict_choose("ours"),        { desc = "Choose the OURS version of a conflict" } },
-  { "n", "<leader>ct",  actions.conflict_choose("theirs"),      { desc = "Choose the THEIRS version of a conflict" } },
-  { "n", "<leader>cb",  actions.conflict_choose("base"),        { desc = "Choose the BASE version of a conflict" } },
-  { "n", "<leader>ca",  actions.conflict_choose("all"),         { desc = "Choose all the versions of a conflict" } },
-  { "n", "dx",          actions.conflict_choose("none"),        { desc = "Delete the conflict region" } },
-  { "n", "<leader>cO",  actions.conflict_choose_all("ours"),    { desc = "Choose the OURS version of a conflict for the whole file" } },
-  { "n", "<leader>cT",  actions.conflict_choose_all("theirs"),  { desc = "Choose the THEIRS version of a conflict for the whole file" } },
-  { "n", "<leader>cB",  actions.conflict_choose_all("base"),    { desc = "Choose the BASE version of a conflict for the whole file" } },
-  { "n", "<leader>cA",  actions.conflict_choose_all("all"),     { desc = "Choose all the versions of a conflict for the whole file" } },
-  { "n", "dX",          actions.conflict_choose_all("none"),    { desc = "Delete the conflict region for the whole file" } },
-  { "n", "<leader>cso", actions.conflict_choose_side("ours"),   { desc = "Replace the MERGED buffer with the entire OURS side" } },
-  { "n", "<leader>cst", actions.conflict_choose_side("theirs"), { desc = "Replace the MERGED buffer with the entire THEIRS side" } },
-  { "n", "<leader>csb", actions.conflict_choose_side("base"),   { desc = "Replace the MERGED buffer with the entire BASE side" } },
-  { "n", "<leader>cr",  actions.merge_mark_resolved,            { desc = "Mark the current transactional conflict resolved" } },
-  { "n", "<leader>ma",  actions.merge_apply,                    { desc = "Apply all transactional merge results" } },
-}
+---@field [5]? string Resolved action ID (internal).
 
 ---@class DiffviewConfig
 ---@field diff_binaries boolean
@@ -190,7 +130,7 @@ local conflict_keymaps = {
 ---@field commit_log_panel? DiffviewCommitLogPanelConfig.user Commit log panel configuration.
 ---@field default_args? DiffviewDefaultArgs.user Default args prepended to the arg-list for `:DiffviewOpen` / `:DiffviewFileHistory`.
 ---@field hooks? DiffviewHooks Event hooks. See `|diffview-config-hooks|`.
----@field keymaps? DiffviewKeymapsConfig.user Keymap overrides; merged with defaults unless `disable_defaults` is true.
+---@field keymaps? DiffviewKeymapsConfig.user Action-ID keymaps using the `minimal` or `none` preset.
 
 ---@type DiffviewConfig
 M.defaults = {
@@ -271,17 +211,17 @@ M.defaults = {
   ---@field ["B"]? string Broken.
   ---@field ["!"]? string Ignored.
   status_icons = {
-    ["A"] = "A",  -- Added
-    ["?"] = "?",  -- Untracked
-    ["M"] = "M",  -- Modified
-    ["R"] = "R",  -- Renamed
-    ["C"] = "C",  -- Copied
-    ["T"] = "T",  -- Type changed
-    ["U"] = "U",  -- Unmerged
-    ["X"] = "X",  -- Unknown
-    ["D"] = "D",  -- Deleted
-    ["B"] = "B",  -- Broken
-    ["!"] = "!",  -- Ignored
+    ["A"] = "A", -- Added
+    ["?"] = "?", -- Untracked
+    ["M"] = "M", -- Modified
+    ["R"] = "R", -- Renamed
+    ["C"] = "C", -- Copied
+    ["T"] = "T", -- Type changed
+    ["U"] = "U", -- Unmerged
+    ["X"] = "X", -- Unknown
+    ["D"] = "D", -- Deleted
+    ["B"] = "B", -- Broken
+    ["!"] = "!", -- Ignored
   },
 
   ---@class DiffviewSigns
@@ -402,7 +342,13 @@ M.defaults = {
     -- Layouts to cycle through with `cycle_layout` action.
     cycle_layouts = {
       default = { "diff2_horizontal", "diff2_vertical" },
-      merge_tool = { "diff3_horizontal", "diff3_vertical", "diff3_mixed", "diff4_mixed", "diff1_plain" },
+      merge_tool = {
+        "diff3_horizontal",
+        "diff3_vertical",
+        "diff3_mixed",
+        "diff4_mixed",
+        "diff1_plain",
+      },
     },
 
     ---@alias DiffviewInlineStyle "unified"|"overleaf"
@@ -507,7 +453,7 @@ M.defaults = {
     win_config = {
       position = "left",
       width = 35,
-      win_opts = {}
+      win_opts = {},
     },
     show = true, -- Show the file panel by default when opening Diffview.
     always_show_sections = false, -- Always show Changes and Staged changes sections even when empty.
@@ -544,7 +490,17 @@ M.defaults = {
     subject_highlight = "ref_aware", -- "ref_aware" (pushed vs unpushed), "merge_aware" (adds a third colour for merged-to-main/master), or "plain".
     -- Ordered list of components to show for each commit entry.
     -- Available: "status", "files", "stats", "hash", "reflog", "ref", "subject", "author", "date"
-    commit_format = { "status", "files", "stats", "hash", "reflog", "ref", "subject", "author", "date" },
+    commit_format = {
+      "status",
+      "files",
+      "stats",
+      "hash",
+      "reflog",
+      "ref",
+      "subject",
+      "author",
+      "date",
+    },
 
     ---@class DiffviewFileHistoryLogOptions
     ---@field git ConfigLogOptions
@@ -598,7 +554,7 @@ M.defaults = {
     win_config = {
       position = "bottom",
       height = 16,
-      win_opts = {}
+      win_opts = {},
     },
     show = true, -- Show the file history panel by default when opening DiffviewFileHistory.
     commit_subject_max_length = 72, -- Max length for commit subject display.
@@ -614,7 +570,7 @@ M.defaults = {
     ---@alias DiffviewCommitLogPanelWinConfig PanelConfig.user|fun(): PanelConfig.user
     ---@alias DiffviewCommitLogPanelWinConfig.user PanelConfig.user|fun(): PanelConfig.user
     win_config = {
-      win_opts = {}
+      win_opts = {},
     },
   },
 
@@ -648,7 +604,7 @@ M.defaults = {
   hooks = {},
 
   ---@class DiffviewKeymapsConfig
-  ---@field disable_defaults boolean
+  ---@field preset "minimal"|"none"
   ---@field view DiffviewKeymapEntry[]
   ---@field diff1 DiffviewKeymapEntry[]
   ---@field diff1_inline DiffviewKeymapEntry[]
@@ -662,7 +618,8 @@ M.defaults = {
   ---@field commit_log_panel DiffviewKeymapEntry[]
 
   ---@class DiffviewKeymapsConfig.user
-  ---@field disable_defaults? boolean
+  ---@field preset? "minimal"|"none"
+  ---@field disable_defaults? boolean Deprecated; use `preset = "none"`.
   ---@field view? DiffviewKeymapEntry[]
   ---@field diff1? DiffviewKeymapEntry[]
   ---@field diff1_inline? DiffviewKeymapEntry[]
@@ -676,102 +633,39 @@ M.defaults = {
   ---@field commit_log_panel? DiffviewKeymapEntry[]
   -- Tabularize formatting pattern: `\v(\"[^"]{-}\",\ze(\s*)actions)|actions\.\w+(\(.{-}\))?,?|\{\ desc\ \=`
   keymaps = {
-    disable_defaults = false, -- Disable the default keymaps
-    view = utils.vec_join(common_nav_keymaps, {
-      -- The `view` bindings are active in the diff buffers, only when the current
-      -- tabpage is a Diffview.
-      { "n", "<C-w>T",      actions.open_in_new_tab,                { desc = "Open diffview in a new tab" } },
-      { "n", "g<C-x>",      actions.cycle_layout,                   { desc = "Cycle through available layouts" } },
-    }, actions.compat.fold_cmds),
-    diff1 = utils.vec_join({
-      -- Mappings in single-window diff layouts (all `Diff1` subclasses except
-      -- `diff1_inline`, which has its own keymap group). These layouts
-      -- participate in the default `merge_tool` cycle, so they inherit the
-      -- conflict-resolution mappings too.
-      { "n", "g?", actions.help({ "view", "diff1" }), { desc = "Open the help panel" } },
-    }, conflict_keymaps),
-    diff1_inline = {
-      -- Mappings in the `diff1_inline` unified diff layout. Native `]c`/`[c`
-      -- and `do` don't work here because the window has `diff=false`, so we
-      -- provide equivalents that walk the renderer's cached hunks.
-      { "n", "]c",  actions.next_inline_hunk,                            { desc = "Jump to the next inline-diff hunk" } },
-      { "n", "[c",  actions.prev_inline_hunk,                            { desc = "Jump to the previous inline-diff hunk" } },
-      { { "n", "x" }, "do", actions.diffget_inline,                      { desc = "Obtain the diff hunk from the old-side version" } },
-      { "n", "g?",  actions.help({ "view", "diff1", "diff1_inline" }),   { desc = "Open the help panel" } },
+    preset = "minimal",
+    view = {},
+    diff1 = {},
+    diff1_inline = {},
+    diff2 = {},
+    diff3 = {},
+    diff4 = {},
+    file_panel = {
+      { "n", "<cr>", "navigation.select_entry" },
+      { "n", "<2-LeftMouse>", "navigation.select_entry" },
+      { "n", "?", "view.action_palette" },
     },
-    diff2 = {
-      -- Mappings in 2-way diff layouts
-      { "n", "g?", actions.help({ "view", "diff2" }), { desc = "Open the help panel" } },
+    file_history_panel = {
+      { "n", "<cr>", "navigation.select_entry" },
+      { "n", "<2-LeftMouse>", "navigation.select_entry" },
+      { "n", "?", "view.action_palette" },
     },
-    diff3 = utils.vec_join({
-      -- Mappings in 3-way diff layouts.
-      -- `Ndo` runs `:diffget` against a side buffer: it pulls the vim
-      -- diff hunk under the cursor, marker-agnostic. `<leader>co/ct/cb`
-      -- (`conflict_choose`) operates on conflict marker blocks instead.
-      { { "n", "x" }, "2do",  actions.diffget("ours"),            { desc = "Diffget the cursor hunk from OURS" } },
-      { { "n", "x" }, "3do",  actions.diffget("theirs"),          { desc = "Diffget the cursor hunk from THEIRS" } },
-      { "n",          "g?",   actions.help({ "view", "diff3" }),  { desc = "Open the help panel" } },
-    }, conflict_keymaps),
-    diff4 = utils.vec_join({
-      -- Mappings in 4-way diff layouts. See the `diff3` block above for
-      -- the `Ndo` vs `<leader>co/ct/cb` distinction.
-      { { "n", "x" }, "1do",  actions.diffget("base"),            { desc = "Diffget the cursor hunk from BASE" } },
-      { { "n", "x" }, "2do",  actions.diffget("ours"),            { desc = "Diffget the cursor hunk from OURS" } },
-      { { "n", "x" }, "3do",  actions.diffget("theirs"),          { desc = "Diffget the cursor hunk from THEIRS" } },
-      { "n",          "g?",   actions.help({ "view", "diff4" }),  { desc = "Open the help panel" } },
-    }, conflict_keymaps),
-    file_panel = utils.vec_join(common_panel_keymaps, common_nav_keymaps, {
-      { { "n", "x" }, "w",    actions.toggle_select_entry,            { desc = "Toggle file selection for multi-file operations" } },
-      { "n", "C",              actions.clear_select_entries,           { desc = "Clear all file selections" } },
-      { "n", "H",              actions.toggle_hide_selected,           { desc = "Toggle hiding reviewed (selected) files" } },
-      { "n", "-",              actions.toggle_stage_entry,             { desc = "Stage / unstage the selected entry (jj: save & advance)" } },
-      { "n", "s",              actions.toggle_stage_entry,             { desc = "Stage / unstage the selected entry (jj: save & advance)" } },
-      { "n", "S",              actions.stage_all,                      { desc = "Stage all entries" } },
-      { "n", "U",              actions.unstage_all,                    { desc = "Unstage all entries" } },
-      { "n", "X",              actions.restore_entry,                  { desc = "Restore entry to the state on the left side" } },
-      { "n", "L",              actions.open_commit_log,                { desc = "Open the commit log panel" } },
-      { "n", "gL",             actions.open_commit_log_file,           { desc = "Open the commit log panel filtered to the file under the cursor" } },
-      { "n", "<C-w>T",        actions.open_in_new_tab,                { desc = "Open diffview in a new tab" } },
-      { "n", "i",              actions.listing_style,                  { desc = "Toggle between 'list' and 'tree' views" } },
-      { "n", "f",              actions.toggle_flatten_dirs,            { desc = "Flatten empty subdirectories in tree listing style" } },
-      { "n", "R",              actions.refresh_files,                  { desc = "Update stats and entries in the file list" } },
-      { "n", "g<C-x>",         actions.cycle_layout,                   { desc = "Cycle available layouts" } },
-      { "n", "[x",             actions.prev_conflict,                  { desc = "Go to the previous conflict" } },
-      { "n", "]x",             actions.next_conflict,                  { desc = "Go to the next conflict" } },
-      { "n", "g?",             actions.help("file_panel"),             { desc = "Open the help panel" } },
-      { "n", "<leader>cO",     actions.conflict_choose_all("ours"),    { desc = "Choose the OURS version of a conflict for the whole file" } },
-      { "n", "<leader>cT",     actions.conflict_choose_all("theirs"),  { desc = "Choose the THEIRS version of a conflict for the whole file" } },
-      { "n", "<leader>cB",     actions.conflict_choose_all("base"),    { desc = "Choose the BASE version of a conflict for the whole file" } },
-      { "n", "<leader>cA",     actions.conflict_choose_all("all"),     { desc = "Choose all the versions of a conflict for the whole file" } },
-      { "n", "dX",             actions.conflict_choose_all("none"),    { desc = "Delete the conflict region for the whole file" } },
-    }),
-    file_history_panel = utils.vec_join(common_panel_keymaps, common_nav_keymaps, {
-      { "n", "g!",            actions.options,                     { desc = "Open the option panel" } },
-      { "n", "<C-A-d>",       actions.open_in_diffview,            { desc = "Open the entry under the cursor in a diffview" } },
-      { "n", "H",             actions.diff_against_head,           { desc = "Open a diffview comparing HEAD with the commit under the cursor" } },
-      { "n", "y",             actions.copy_hash,                   { desc = "Copy the commit hash of the entry under the cursor" } },
-      { "n", "L",             actions.open_commit_log,             { desc = "Show commit details" } },
-      { "n", "X",             actions.restore_entry,               { desc = "Restore file to the state from the selected entry" } },
-      { "n", "g<C-x>",        actions.cycle_layout,                { desc = "Cycle available layouts" } },
-      { "n", "g?",            actions.help("file_history_panel"),  { desc = "Open the help panel" } },
-    }),
     option_panel = {
-      { "n", "<tab>", actions.select_entry,          { desc = "Change the current option" } },
-      { "n", "q",     actions.close,                 { desc = "Close the panel" } },
-      { "n", "<esc>", actions.close,                 { desc = "Close the panel" } },
-      { "n", "g?",    actions.help("option_panel"),  { desc = "Open the help panel" } },
+      { "n", "<cr>", "navigation.select_entry" },
+      { "n", "q", "view.close" },
+      { "n", "<esc>", "view.close" },
+      { "n", "?", "view.action_palette" },
     },
     help_panel = {
-      { "n", "q",     actions.close,  { desc = "Close help menu" } },
-      { "n", "<esc>", actions.close,  { desc = "Close help menu" } },
+      { "n", "q", "view.close" },
+      { "n", "<esc>", "view.close" },
     },
     commit_log_panel = {
-      { "n", "q",     actions.close,  { desc = "Close commit log" } },
-      { "n", "<esc>", actions.close,  { desc = "Close commit log" } },
+      { "n", "q", "view.close" },
+      { "n", "<esc>", "view.close" },
     },
   },
 }
--- stylua: ignore end
 
 ---@type EventEmitter
 M.user_emitter = EventEmitter()
@@ -1023,7 +917,7 @@ end
 
 function M.find_option_keymap(t)
   for _, mapping in ipairs(t) do
-    if mapping[3] and mapping[3] == actions.options then
+    if mapping[5] == "layout.options" or (mapping[3] and mapping[3] == actions.options) then
       return mapping
     end
   end
@@ -1031,7 +925,10 @@ end
 
 function M.find_help_keymap(t)
   for _, mapping in ipairs(t) do
-    if type(mapping[4]) == "table" and mapping[4].desc == "Open the help panel" then
+    if
+      mapping[5] == "view.action_palette"
+      or (type(mapping[4]) == "table" and mapping[4].desc == "Open the help panel")
+    then
       return mapping
     end
   end
@@ -1832,13 +1729,16 @@ function M.setup(user_config)
     { path = "default_args.DiffviewFileHistory" }
   )
 
-  -- hooks and keymaps. Only the containers are validated here (plus
-  -- `keymaps.disable_defaults`, which is branched on below); individual hook
-  -- callbacks and keymap entries are type-checked where they are consumed.
+  -- Hooks and action-ID keymaps.
   validate.table(c, "hooks", d.hooks)
   validate.table(c, "keymaps", d.keymaps)
-  validate.boolean(c.keymaps, "disable_defaults", d.keymaps.disable_defaults, {
-    path = "keymaps.disable_defaults",
+  local user_keymaps = type(user_config.keymaps) == "table" and user_config.keymaps or {}
+  if user_keymaps.disable_defaults ~= nil then
+    utils.warn("'keymaps.disable_defaults' was removed; use keymaps.preset = 'none'.")
+    c.keymaps.preset = user_keymaps.disable_defaults and "none" or "minimal"
+  end
+  validate.enum(c.keymaps, "preset", { "minimal", "none" }, d.keymaps.preset, {
+    path = "keymaps.preset",
   })
 
   for _, name in ipairs({ "single_file", "multi_file" }) do
@@ -1861,20 +1761,15 @@ function M.setup(user_config)
     end
   end
 
-  -- `M._config.keymaps` is validated to a table above, but the merge below
-  -- reads the user's overrides from `user_config` directly. Index that
-  -- through a shape-checked local: `utils.tbl_access` would error when
-  -- `user_config.keymaps` is a truthy non-table (e.g. a number).
-  local user_keymaps = type(user_config.keymaps) == "table" and user_config.keymaps or {}
-
-  if M._config.keymaps.disable_defaults then
-    for name, _ in pairs(M._config.keymaps) do
-      if name ~= "disable_defaults" then
-        M._config.keymaps[name] = user_keymaps[name] or {}
+  local preset = M._config.keymaps.preset
+  M._config.keymaps = utils.tbl_deep_clone(M.defaults.keymaps)
+  M._config.keymaps.preset = preset
+  if preset == "none" then
+    for name, keymaps in pairs(M._config.keymaps) do
+      if type(keymaps) == "table" then
+        M._config.keymaps[name] = {}
       end
     end
-  else
-    M._config.keymaps = utils.tbl_clone(M.defaults.keymaps)
   end
 
   -- Merge default and user keymaps
@@ -1893,6 +1788,7 @@ function M.setup(user_config)
           table.remove(keymaps, i)
         end
       end
+      M._config.keymaps[name] = require("diffview.runtime.keymaps").resolve_all(keymaps)
     end
   end
 

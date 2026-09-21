@@ -81,8 +81,9 @@ Defined in `lua/diffview/config.lua`.  Current top-level keys:
 | `keymaps` | table | Per-layout keymap tables (~98 entries) |
 
 > [!WARNING]
-> The `keymaps` table is scheduled for replacement in Phase 3.
-> The new API will be `keymaps = { preset = "minimal", custom = { ["action.id"] = "<keys>" } }`.
+> Phase 3 replaced the built-in legacy mappings with `preset = "minimal" |
+> "none"`. Context tables accept stable action IDs as their rhs. See
+> `docs/phase3-actions.md`.
 
 ---
 

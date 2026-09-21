@@ -1639,60 +1639,31 @@ hooks                                           *diffview-config-hooks*
 keymaps                                         *diffview-config-keymaps*
         Type: `table`, Default: (see defaults)
 
-        The keymaps config is structured as a table with sub-tables for
-        various different contexts where mappings can be declared. In these
-        sub-tables key-value pairs are treated as the |{lhs}| and |{rhs}| of a
-        normal mode mapping. These mappings all use the |:map-arguments|
-        `silent`, `nowait`, and `noremap`. The implementation uses
-        |vim.keymap.set()|, so the {rhs} can be either a vim command in the
-        form of a string, or it can be a lua function: >lua
+        `preset` is either `"minimal"` (the default) or `"none"`. Minimal
+        installs only activation, close, mouse, and action-palette mappings in
+        plugin-owned panel/float buffers. Diff buffers receive no domain
+        mappings.
 
-        view = {
-          -- Vim command:
-          ["a"] = "<Cmd>echom 'foo'<CR>",
-          -- Lua function:
-          ["b"] = function() print("bar") end,
-        }
-<
-
-        For more control (i.e. mappings for other modes), you can also define
-        index values as list-like tables containing the arguments for
-        |vim.keymap.set()|. This way you can also change all the
-        |:map-arguments| with the only exception being the `buffer` field, as
-        this will be overridden with the target buffer number: >lua
-
-        view = {
-          -- Normal and visual mode mapping to vim command:
-          { { "n", "v" }, "<leader>a", "<Cmd>echom 'foo'<CR>", { silent = true } },
-          -- Visual mode mapping to lua function:
-          { "v", "<leader>b", function() print("bar") end, { nowait = true } },
-        }
-<
-
-        Setting a mapping's `desc` field to `"diffview_ignore"` will hide the
-        mapping from the help panel: >lua
-
-        view = {
-          -- Ignore mapping in the help panel
-          { "n", "<2-LeftMouse>", actions.select_entry, { desc = "diffview_ignore" } },
-        }
-<
-
-        To disable all the default mappings simply set: >lua
+        Bind a stable ActionRegistry ID as the mapping rhs: >lua
 
         keymaps = {
-          disable_defaults = true,
+          preset = "minimal",
+          file_panel = {
+            { "n", "s", "diff.toggle_stage_entry" },
+            { "n", "R", "file.refresh_files" },
+          },
         }
 <
 
-        To disable any single mapping without disabling them all, set its
-        {rhs} to `false`: >lua
+        Raw Vim rhs strings and Lua callbacks remain supported for custom
+        behaviour. Action IDs automatically obtain their description,
+        availability check, and dangerous-action confirmation from the
+        registry. Use `require("diffview.api").actions.list()` to inspect IDs.
 
-        view = {
-          -- Disable the default normal mode mapping for `<tab>`:
-          ["<tab>"] = false,
-          -- Disable the default visual mode mapping for `gf`:
-          { "x", "gf", false },
+        To install no defaults: >lua
+
+        keymaps = {
+          preset = "none",
         }
 <
 ------------------------------------------------------------------------------

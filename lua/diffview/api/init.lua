@@ -12,6 +12,7 @@ local lib = lazy.require("diffview.lib") ---@module "diffview.lib"
 local M = {}
 
 M.selections = lazy.require("diffview.api.selections") ---@module "diffview.api.selections"
+M.actions = lazy.require("diffview.api.actions") ---@module "diffview.api.actions"
 
 ---Replace the revision range of an open DiffView in-place.
 ---

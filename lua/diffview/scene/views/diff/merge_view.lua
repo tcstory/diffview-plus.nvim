@@ -97,7 +97,9 @@ function MergeView:init(opt)
       editable = true,
       buffer_context = "[merge-result]",
       on_write = function()
-        utils.warn("This is a transactional Result buffer. Use [ Apply Changes ] to write all files.")
+        utils.warn(
+          "This is a transactional Result buffer. Use [ Apply Changes ] to write all files."
+        )
       end,
     }) --[[@as vcs.File ]]
     result_file.winbar = " RESULT (Not applied)"
@@ -229,12 +231,18 @@ function MergeView:_handle_left_mouse()
 
           if offset > 0 then
             local status_str = conflict_on_line.resolved
-              and (" ✔ %s "):format(conflict_on_line.choice or "manual")
+                and (" ✔ %s "):format(conflict_on_line.choice or "manual")
               or (" Unresolved %d "):format(conflict_on_line.id)
             local prefix_w = vim.fn.strdisplaywidth(status_str)
-            local ours_str = conflict_on_line.resolved and conflict_on_line.choice == "ours" and "[ ✔ OURS ]" or "[ OURS ]"
+            local ours_str = conflict_on_line.resolved
+                and conflict_on_line.choice == "ours"
+                and "[ ✔ OURS ]"
+              or "[ OURS ]"
             local ours_w = vim.fn.strdisplaywidth(ours_str)
-            local theirs_str = conflict_on_line.resolved and conflict_on_line.choice == "theirs" and "[ ✔ THEIRS ]" or "[ THEIRS ]"
+            local theirs_str = conflict_on_line.resolved
+                and conflict_on_line.choice == "theirs"
+                and "[ ✔ THEIRS ]"
+              or "[ THEIRS ]"
             local theirs_w = vim.fn.strdisplaywidth(theirs_str)
 
             local ours_start = prefix_w + 1
@@ -255,7 +263,13 @@ function MergeView:_handle_left_mouse()
                 then
                   return
                 end
-                local ok, err = pcall(self.merge_session.choose, self.merge_session, entry.path, conflict_on_line, choice)
+                local ok, err = pcall(
+                  self.merge_session.choose,
+                  self.merge_session,
+                  entry.path,
+                  conflict_on_line,
+                  choice
+                )
                 if not ok then
                   utils.err("Unable to update merge conflict: " .. tostring(err))
                   return
@@ -288,18 +302,19 @@ function MergeView:update_merge_ui()
   local unresolved, total = self.merge_session:counts()
   if self.panel:is_open() and self.panel.winid and api.nvim_win_is_valid(self.panel.winid) then
     local label = self.panel_collapsed and "[ ▶ ]" or "[ ◀ ] Hide files"
-    vim.wo[self.panel.winid].winbar = (
-      "%%#DiffviewFilePanelTitle#%%@v:lua.DiffviewMergePanelClick@%s%%X%%*"
-    ):format(label)
+    vim.wo[self.panel.winid].winbar = ("%%#DiffviewFilePanelTitle#%%@v:lua.DiffviewMergePanelClick@%s%%X%%*"):format(
+      label
+    )
   end
   local entry = self.cur_entry
   if entry and entry.layout and entry.layout.b then
     local current = assert(self.merge_session:get(entry.path))
     local file_remaining = self.merge_session:entry_remaining(current)
     local file_total = #current.conflicts
-    local nav_buttons = "%%@v:lua.DiffviewMergePrevConflictClick@[ ◀ ]%%X %%@v:lua.DiffviewMergeNextConflictClick@[ ▶ ]%%X"
+    local nav_buttons =
+      "%%@v:lua.DiffviewMergePrevConflictClick@[ ◀ ]%%X %%@v:lua.DiffviewMergeNextConflictClick@[ ▶ ]%%X"
     local apply_label = unresolved == 0
-      and "%%#DiffviewFilePanelInsertions#%%@v:lua.DiffviewMergeApplyClick@[ ✔ APPLY CHANGES ]%%X%%*"
+        and "%%#DiffviewFilePanelInsertions#%%@v:lua.DiffviewMergeApplyClick@[ ✔ APPLY CHANGES ]%%X%%*"
       or "%%@v:lua.DiffviewMergeApplyClick@[ APPLY ]%%X"
     entry.layout.b.file.winbar = (
       "RESULT  "
@@ -413,15 +428,21 @@ function MergeView:jump_conflict(delta)
     api.nvim_win_set_cursor(main.id, { target, 0 })
     pcall(vim.cmd, "normal! zvzz")
     local current = assert(self.merge_session:get(self.cur_entry.path))
-    api.nvim_echo({ {
-      ("Unresolved conflict [%d/%d]"):format(index, self.merge_session:entry_remaining(current)),
-    } }, false, {})
+    api.nvim_echo({
+      {
+        ("Unresolved conflict [%d/%d]"):format(index, self.merge_session:entry_remaining(current)),
+      },
+    }, false, {})
     pcall(vim.cmd, "redraw")
     return { current = index, total = self.merge_session:entry_remaining(current) }
   else
     local current = self.merge_session:get(self.cur_entry.path)
     if current and self.merge_session:entry_remaining(current) == 0 then
-      api.nvim_echo({ { "All conflicts resolved in this file", "DiffviewFilePanelInsertions" } }, false, {})
+      api.nvim_echo(
+        { { "All conflicts resolved in this file", "DiffviewFilePanelInsertions" } },
+        false,
+        {}
+      )
     end
   end
 end
@@ -456,15 +477,15 @@ function MergeView:can_close(opts)
   if self.applied or opts.force then
     return true
   end
-  utils.err("Merge results have not been applied. Click [ Apply Changes ] or use :DiffviewClose! to discard them.")
+  utils.err(
+    "Merge results have not been applied. Click [ Apply Changes ] or use :DiffviewClose! to discard them."
+  )
   return false
 end
 
 _G.DiffviewMergeApplyClick = function()
   local view = require("diffview.lib").get_current_view()
-  if view and view.apply_all then
-    view:apply_all()
-  end
+  return require("diffview.runtime.action_registry").execute("merge.merge_apply", view)
 end
 
 _G.DiffviewMergePanelClick = function()
@@ -476,20 +497,18 @@ end
 
 _G.DiffviewMergePrevConflictClick = function(...)
   local view = require("diffview.lib").get_current_view()
-  if view and view.jump_conflict then
-    local res = view:jump_conflict(-1)
-    pcall(vim.cmd, "redraw")
-    return res
-  end
+  local res =
+    require("diffview.runtime.action_registry").execute("navigation.prev_conflict", view, ...)
+  pcall(vim.cmd, "redraw")
+  return res
 end
 
 _G.DiffviewMergeNextConflictClick = function(...)
   local view = require("diffview.lib").get_current_view()
-  if view and view.jump_conflict then
-    local res = view:jump_conflict(1)
-    pcall(vim.cmd, "redraw")
-    return res
-  end
+  local res =
+    require("diffview.runtime.action_registry").execute("navigation.next_conflict", view, ...)
+  pcall(vim.cmd, "redraw")
+  return res
 end
 
 M.MergeView = MergeView

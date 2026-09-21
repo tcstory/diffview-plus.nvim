@@ -1,5 +1,6 @@
 local Panel = require("diffview.ui.panel").Panel
 local actions = require("diffview.actions")
+local registry = require("diffview.runtime.action_registry")
 local get_user_config = require("diffview.config").get_config
 local oop = require("diffview.oop")
 local utils = require("diffview.utils")
@@ -139,7 +140,7 @@ function HelpPanel:update_components()
         end
 
         local ret = utils.tbl_clone(v)
-        ret[5] = desc
+        ret[6] = desc
 
         return ret
       end)
@@ -150,7 +151,7 @@ function HelpPanel:update_components()
 
       -- Sort mappings by description
       table.sort(maps, function(a, b)
-        a, b = a[5], b[5]
+        a, b = a[6], b[6]
         -- Ensure lua functions are sorted last
         if a:match("^<Lua") then
           a = "~" .. a
@@ -174,10 +175,13 @@ function HelpPanel:update_components()
       }
 
       for _, mapping in ipairs(maps) do
-        local desc = mapping[5]
+        local desc = mapping[6]
+        local action_id = mapping[5]
+        local available = action_id and registry.is_available(action_id, self.parent)
+          or actions._is_applicable(mapping[3], self.parent)
 
-        if desc ~= "diffview_ignore" and actions._is_applicable(mapping[3], self.parent) then
-          width = math.max(width, 14 + 4 + #mapping[5] + 2)
+        if desc ~= "diffview_ignore" and available then
+          width = math.max(width, 14 + 4 + #desc + 2)
           table.insert(items, {
             name = "item",
             context = {

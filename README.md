@@ -56,7 +56,8 @@ Plug 'dlyongemallo/diffview-plus.nvim'
 :DiffviewClose             " Close the current diffview
 ```
 
-Press `g?` in any diffview buffer to see all available keymaps.
+Press `?` in a file/history panel to open the context-sensitive action palette.
+Diff buffers intentionally keep Neovim's native motions and diff commands.
 
 See [USAGE.md](USAGE.md) for detailed guides on PR review, stash inspection,
 and committing workflows.
@@ -72,11 +73,11 @@ and committing workflows.
   ![file history](https://user-images.githubusercontent.com/2786478/188331057-f9ec9a0d-8cda-4ff8-ac98-febcc7aa4010.png)
 
 - **Merge Tool** — 3-way and 4-way diff layouts for resolving conflicts,
-  with mappings for choosing OURS/THEIRS/BASE versions.
+  with clickable controls for choosing OURS/THEIRS/BASE versions.
   ![merge tool](https://user-images.githubusercontent.com/2786478/188286293-13bbf0ab-3595-425d-ba4a-12f514c17eb6.png)
 
 - **Staging** — Stage and unstage individual files or all changes from the
-  file panel (`-` / `s` / `S` / `U`). You can stage individual hunks by
+  action palette or your own action-ID mappings. You can stage individual hunks by
   editing any buffer that represents the index (after running `:DiffviewOpen`
   with no `[rev]` the entries under "Changes" will have the index buffer
   on the left side, and the entries under "Staged changes" will have it on the
@@ -88,11 +89,10 @@ and committing workflows.
   preserved on both added and deleted lines. Configurable via
   `view.inline.style` (`"unified"` / `"overleaf"`).
 
-- **Multi-file Selection** — Select multiple files in the file panel
-  (`w` to toggle, `C` to clear) for batch stage / unstage / restore.
-  Press `H` to hide or reveal reviewed (selected) files and focus on the
-  remaining changes. These mappings can be overridden through
-  `keymaps.file_panel`. When `persist_selections` is enabled, selections and
+- **Multi-file Selection** — Select multiple files from the file-panel action
+  palette for batch stage / unstage / restore and hide reviewed files. Actions
+  can be assigned through `keymaps.file_panel` using stable IDs. When
+  `persist_selections` is enabled, selections and
   the hide-reviewed state survive Neovim restarts.
 
 - **Pin Local in File History** — Run `:DiffviewFileHistory --pin-local`
@@ -166,7 +166,12 @@ require("diffview").setup({
     win_config = { position = "left", width = 35 }, -- Use "auto" to fit content
   },
   hooks = {},   -- See :h diffview-config-hooks
-  keymaps = {}, -- See :h diffview-config-keymaps
+  keymaps = {
+    preset = "minimal", -- "minimal" or "none"
+    file_panel = {
+      { "n", "s", "diff.toggle_stage_entry" },
+    },
+  }, -- See :h diffview-config-keymaps
 })
 ```
 
