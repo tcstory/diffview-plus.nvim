@@ -424,9 +424,10 @@ end
 ---@return diffview.ConflictCount?
 function M.jumpto_conflict(num, use_delta)
   local view = lib.get_current_view()
+  local diff_view = view --[[@as DiffView?]]
 
-  if view and view.merge_session and view.jump_conflict then
-    return view:jump_conflict(use_delta and num or (num >= 0 and 1 or -1))
+  if diff_view and diff_view.merge_session and diff_view.jump_conflict then
+    return diff_view:jump_conflict(use_delta and num or (num >= 0 and 1 or -1))
   end
 
   if view and view:instanceof(StandardView.__get()) then
@@ -764,9 +765,10 @@ end
 function M.conflict_choose(target)
   return tag(function()
     local view = lib.get_current_view()
+    local diff_view = view --[[@as DiffView?]]
 
-    if view and view.merge_session and view.choose_conflict then
-      view:choose_conflict(target)
+    if diff_view and diff_view.merge_session and diff_view.choose_conflict then
+      diff_view:choose_conflict(target)
       return
     end
 
@@ -809,16 +811,18 @@ end
 
 function M.merge_mark_resolved()
   local view = lib.get_current_view()
-  if view and view.merge_session and view.choose_conflict then
-    view:choose_conflict("manual")
+  local diff_view = view --[[@as DiffView?]]
+  if diff_view and diff_view.merge_session and diff_view.choose_conflict then
+    diff_view:choose_conflict("manual")
   end
 end
 tag(M.merge_mark_resolved, "merge_only")
 
 function M.merge_apply()
   local view = lib.get_current_view()
-  if view and view.merge_session and view.apply_all then
-    view:apply_all()
+  local diff_view = view --[[@as DiffView?]]
+  if diff_view and diff_view.merge_session and diff_view.apply_all then
+    diff_view:apply_all()
   end
 end
 tag(M.merge_apply, "merge_only")
@@ -882,13 +886,15 @@ end
 function M.diffget(target)
   return function()
     local view = lib.get_current_view()
+    local diff_view = view --[[@as DiffView?]]
     if
-      view
-      and view.merge_session
-      and view.choose_conflict
+      diff_view
+      and diff_view.merge_session
+      and diff_view.choose_conflict
       and (target == "ours" or target == "theirs" or target == "base")
     then
-      view:choose_conflict(target)
+      local choice = target --[[@as "ours"|"theirs"|"base"]]
+      diff_view:choose_conflict(choice)
       return
     end
 

@@ -17,7 +17,7 @@ local M = {}
 ---@field base string[]
 ---@field theirs string[]
 ---@field resolved boolean
----@field choice? "ours"|"base"|"theirs"|"manual"
+---@field choice? "ours"|"base"|"theirs"|"all"|"manual"
 ---@field extmark? integer
 
 ---@class MergeSession.Entry
@@ -63,7 +63,8 @@ local function bytes_to_lines(bytes)
 end
 
 ---@param path string
----@return boolean
+---@return string? bytes
+---@return uv.aliases.fs_stat_table? stat
 local function read_file_snapshot(path)
   local stat = vim.uv.fs_stat(path)
   if not stat then
@@ -338,7 +339,10 @@ function MergeSession:_place_mark(entry, conflict)
       { " ", "Normal" },
       { conflict.choice == "ours" and "[ ✔ OURS ]" or "[ OURS ]", "DiffviewFilePanelInsertions" },
       { " ", "Normal" },
-      { conflict.choice == "theirs" and "[ ✔ THEIRS ]" or "[ THEIRS ]", "DiffviewFilePanelDeletions" },
+      {
+        conflict.choice == "theirs" and "[ ✔ THEIRS ]" or "[ THEIRS ]",
+        "DiffviewFilePanelDeletions",
+      },
     }
   else
     virt_line = {
@@ -439,8 +443,10 @@ function MergeSession:choose(path, row_or_conflict, choice)
   local entry = assert(self.entries[path])
   local conflict
   if type(row_or_conflict) == "table" then
+    ---@cast row_or_conflict MergeSession.Conflict
     conflict = row_or_conflict
   else
+    ---@cast row_or_conflict integer
     local row = row_or_conflict
     -- A resolved region remains selectable so the user can revise an earlier
     -- choice. Outside any tracked region, fall forward to the next unresolved
@@ -477,7 +483,11 @@ function MergeSession:choose(path, row_or_conflict, choice)
   end
 
   conflict.resolved = true
-  conflict.choice = choice == "none" and "manual" or choice
+  if choice == "none" then
+    conflict.choice = "manual"
+  else
+    conflict.choice = choice --[[@as "ours"|"base"|"theirs"|"all"|"manual"]]
+  end
   self:_place_mark(entry, conflict)
   self:_changed(entry)
   return true
@@ -569,7 +579,8 @@ function MergeSession:apply()
     local entry = self.entries[path]
     for stage = 1, 3 do
       if read_stage_oid(self.adapter, path, stage) ~= entry.stage_oids[stage] then
-        return false, ("Git index changed outside the merge session: %s (stage %d)"):format(path, stage)
+        return false,
+          ("Git index changed outside the merge session: %s (stage %d)"):format(path, stage)
       end
     end
     local current_bytes, stat = read_file_snapshot(entry.absolute_path)
@@ -581,7 +592,8 @@ function MergeSession:apply()
   local prepared = {}
   for _, path in ipairs(self.order) do
     local entry = self.entries[path]
-    local lines = entry.bufnr and api.nvim_buf_is_valid(entry.bufnr)
+    local lines = entry.bufnr
+        and api.nvim_buf_is_valid(entry.bufnr)
         and api.nvim_buf_get_lines(entry.bufnr, 0, -1, false)
       or entry.result
     local bytes = table.concat(lines, "\n")
@@ -608,7 +620,11 @@ function MergeSession:apply()
     if not ok then
       for _, rollback in ipairs(applied) do
         if rollback.entry.existed then
-          write_bytes(rollback.entry.absolute_path, rollback.entry.original_bytes or "", rollback.entry.mode)
+          write_bytes(
+            rollback.entry.absolute_path,
+            rollback.entry.original_bytes or "",
+            rollback.entry.mode
+          )
         else
           vim.fn.delete(rollback.entry.absolute_path)
         end

@@ -1462,7 +1462,7 @@ function M.attach_to_window(bufnr, winid)
   end
   -- :h nvim_win_add_ns — add namespace `M.ns` to window `winid` so that
   -- extmarks in that namespace render only in this window.
-  local ok = pcall(win_add_ns, winid, M.ns)
+  local ok = pcall(assert(win_add_ns), winid, M.ns)
   if not ok then
     return
   end
@@ -1500,7 +1500,7 @@ detach_from_all_windows = function(bufnr)
   -- previously scoped for this buffer.
   for winid in pairs(set) do
     if api.nvim_win_is_valid(winid) then
-      pcall(win_remove_ns, winid, M.ns)
+      pcall(assert(win_remove_ns), winid, M.ns)
     end
   end
   M._scoped_wins_by_buf[bufnr] = nil

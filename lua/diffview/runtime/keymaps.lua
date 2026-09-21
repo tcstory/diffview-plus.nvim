@@ -12,14 +12,18 @@ local M = {}
 ---@return DiffviewKeymapEntry
 function M.resolve(mapping)
   local resolved = vim.deepcopy(mapping)
-  local id = type(resolved[3]) == "string" and registry.get(resolved[3]) and resolved[3] or nil
+  local rhs = resolved[3]
+  local id
+  if type(rhs) == "string" and registry.get(rhs) then
+    id = rhs
+  end
   if id then
     local spec = assert(registry.get(id))
     resolved[3] = registry.callback(id)
     resolved[4] = vim.tbl_extend("keep", resolved[4] or {}, { desc = spec.desc })
     resolved[5] = id
-  elseif type(resolved[3]) == "function" then
-    resolved[5] = registry.id_for(resolved[3])
+  elseif type(rhs) == "function" then
+    resolved[5] = registry.id_for(rhs)
   end
   return resolved
 end

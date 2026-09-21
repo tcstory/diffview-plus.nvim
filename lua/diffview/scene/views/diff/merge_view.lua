@@ -22,6 +22,7 @@ local M = {}
 ---@field applied boolean
 ---@field panel_collapsed boolean
 ---@field panel_expanded_width? integer
+---@field _winbar_routes? table
 local MergeView = oop.create_class("MergeView", NullDiffView.__get())
 
 ---@param opt { adapter: GitAdapter, paths: string[] }
@@ -226,7 +227,8 @@ function MergeView:update_merge_ui()
     vim.wo[self.panel.winid].winbar = router.winbar(id, label, "DiffviewFilePanelTitle")
   end
   local entry = self.cur_entry
-  if entry and entry.layout and entry.layout.b then
+  local entry_layout = entry and entry.layout --[[@as Diff1|Diff2|Diff3|Diff4|nil]]
+  if entry and entry_layout and entry_layout.b then
     local current = assert(self.merge_session:get(entry.path))
     local file_remaining = self.merge_session:entry_remaining(current)
     local file_total = #current.conflicts
@@ -245,13 +247,14 @@ function MergeView:update_merge_ui()
       unresolved,
       total
     )
-    entry.layout.b.file.winbar = "RESULT  " .. nav_buttons .. "  " .. apply_label .. counts
-    if self.cur_layout and self.cur_layout.b and self.cur_layout.b.file then
-      self.cur_layout.b.file.winbar = entry.layout.b.file.winbar
+    entry_layout.b.file.winbar = "RESULT  " .. nav_buttons .. "  " .. apply_label .. counts
+    local current_layout = self.cur_layout --[[@as Diff1|Diff2|Diff3|Diff4|nil]]
+    if current_layout and current_layout.b and current_layout.b.file then
+      current_layout.b.file.winbar = entry_layout.b.file.winbar
     end
-    local winid = self.cur_layout and self.cur_layout.b and self.cur_layout.b.id
+    local winid = current_layout and current_layout.b and current_layout.b.id
     if winid and api.nvim_win_is_valid(winid) then
-      vim.wo[winid].winbar = entry.layout.b.file.winbar
+      vim.wo[winid].winbar = entry_layout.b.file.winbar
     end
   end
   self:_install_click_handlers()
@@ -306,7 +309,8 @@ function MergeView:toggle_file_panel_width()
     self.panel_collapsed = true
     api.nvim_win_set_width(winid, 5)
     self:_equalize_diff_windows()
-    local result_win = self.cur_layout and self.cur_layout.b and self.cur_layout.b.id
+    local current_layout = self.cur_layout --[[@as Diff1|Diff2|Diff3|Diff4|nil]]
+    local result_win = current_layout and current_layout.b and current_layout.b.id
     if result_win and api.nvim_win_is_valid(result_win) then
       api.nvim_set_current_win(result_win)
     end
@@ -360,14 +364,18 @@ function MergeView:jump_conflict(delta)
     api.nvim_set_current_win(main.id)
     self.cur_layout:sync_scroll()
     api.nvim_win_set_cursor(main.id, { target, 0 })
-    pcall(vim.cmd, "normal! zvzz")
+    pcall(function()
+      vim.cmd("normal! zvzz")
+    end)
     local current = assert(self.merge_session:get(self.cur_entry.path))
     api.nvim_echo({
       {
         ("Unresolved conflict [%d/%d]"):format(index, self.merge_session:entry_remaining(current)),
       },
     }, false, {})
-    pcall(vim.cmd, "redraw")
+    pcall(function()
+      vim.cmd("redraw")
+    end)
     return { current = index, total = self.merge_session:entry_remaining(current) }
   else
     local current = self.merge_session:get(self.cur_entry.path)

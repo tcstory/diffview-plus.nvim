@@ -103,9 +103,16 @@ function M.execute(id, view, ...)
     return false, reason
   end
   if spec.danger then
-    local prompt = type(spec.confirm) == "function" and spec.confirm(view, ...)
-      or spec.confirm
-      or ("Run '%s'?"):format(spec.label)
+    local confirm = spec.confirm
+    ---@type string
+    local prompt
+    if type(confirm) == "function" then
+      prompt = confirm(view, ...)
+    elseif type(confirm) == "string" then
+      prompt = confirm
+    else
+      prompt = ("Run '%s'?"):format(spec.label)
+    end
     if not require("diffview.runtime.confirm").ask(prompt) then
       return false, "cancelled"
     end

@@ -21,6 +21,7 @@ local function remember(owner, id)
 end
 
 ---@class diffview.UIRoute
+---@field id? integer
 ---@field owner? any
 ---@field action? string
 ---@field handler? fun(route: diffview.UIRoute): any
@@ -200,7 +201,10 @@ function M._reset()
 end
 
 _G.DiffviewUIRouter = function(minwid)
-  return M.dispatch_id(tonumber(minwid))
+  local id = tonumber(minwid)
+  if id then
+    return M.dispatch_id(id)
+  end
 end
 
 return M

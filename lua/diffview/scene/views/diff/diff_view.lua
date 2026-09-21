@@ -51,6 +51,12 @@ local same_rev = lazy.access(rev_lib, "same_rev") --[[@as fun(a: Rev?, b: Rev?):
 ---@field files FileDict
 ---@field file_idx integer
 ---@field merge_ctx? vcs.MergeContext
+---@field merge_session? MergeSession
+---@field choose_conflict? fun(self: DiffView, choice: "ours"|"theirs"|"base"|"all"|"none"|"manual"): boolean
+---@field choose_all_conflicts? fun(self: DiffView, choice: DiffviewConflictTarget)
+---@field choose_side? fun(self: DiffView, choice: DiffviewConflictSideTarget)
+---@field jump_conflict? fun(self: DiffView, delta: integer): diffview.ConflictCount?
+---@field apply_all? fun(self: DiffView): boolean
 ---@field initialized boolean
 ---@field valid boolean
 ---@field update_needed? boolean # Set by external listeners to force a refresh on next redraw.

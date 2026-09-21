@@ -84,7 +84,6 @@ function M.diffview_open(args)
 
   ---@cast adapter -?
 
-
   local opts = adapter:diffview_options(argo)
 
   if opts == nil then
@@ -151,14 +150,15 @@ function M.diffview_merge_open(args)
   end
 
   for _, view in ipairs(M.views) do
+    local diff_view = view --[[@as DiffView]]
     if
-      view.merge_session
-      and view.adapter.ctx.toplevel == adapter.ctx.toplevel
-      and view.tabpage
-      and api.nvim_tabpage_is_valid(view.tabpage)
+      diff_view.merge_session
+      and diff_view.adapter.ctx.toplevel == adapter.ctx.toplevel
+      and diff_view.tabpage
+      and api.nvim_tabpage_is_valid(diff_view.tabpage)
     then
-      api.nvim_set_current_tabpage(view.tabpage)
-      return view
+      api.nvim_set_current_tabpage(diff_view.tabpage)
+      return diff_view
     end
   end
 
@@ -180,7 +180,9 @@ function M.diffview_merge_open(args)
     return
   end
 
-  local ok, view = pcall(MergeView, { adapter = adapter, paths = paths })
+  local ok, view = pcall(function()
+    return MergeView({ adapter = adapter, paths = paths })
+  end)
   if not ok then
     utils.err("Unable to create transactional merge view: " .. tostring(view))
     return
