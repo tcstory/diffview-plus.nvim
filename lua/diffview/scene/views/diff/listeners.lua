@@ -12,6 +12,18 @@ local vcs_utils = lazy.require("diffview.vcs.utils") ---@module "diffview.vcs.ut
 local api = vim.api
 local await = async.await
 
+---@param view DiffView|table
+---@return FileEntry?
+local function current_entry(view)
+  return view.store and view.store.current_entry or view.panel.cur_file
+end
+
+---@param view DiffView|table
+---@return boolean
+local function hides_reviewed(view)
+  return view.store and view.store.hide_reviewed or view.panel.hide_selected == true
+end
+
 ---Find the nearest file that is not excluded, searching forward first.
 ---@param files FileEntry[]
 ---@param anchor FileEntry?
@@ -109,7 +121,7 @@ return function(view)
 
   return {
     tab_enter = function()
-      local file = view.panel.cur_file
+      local file = current_entry(view)
       if file then
         -- Suppress highlight_file to avoid expanding collapsed directories;
         -- the panel cursor is restored separately below.
@@ -123,7 +135,7 @@ return function(view)
       end
     end,
     tab_leave = function()
-      local file = view.panel.cur_file
+      local file = current_entry(view)
       view:save_panel_cursor()
 
       if file then
@@ -265,8 +277,8 @@ return function(view)
       if mode == "v" or mode == "V" or mode == "\22" then
         local start_line = vim.fn.line("v")
         local end_line = vim.fn.line(".")
-        local visible_files = view.panel.hide_selected and view.panel:ordered_file_list() or nil
-        local cur_file = view.panel.cur_file
+        local visible_files = hides_reviewed(view) and view.panel:ordered_file_list() or nil
+        local cur_file = current_entry(view)
         if start_line > end_line then
           start_line, end_line = end_line, start_line
         end
@@ -336,7 +348,7 @@ return function(view)
       -- In hide mode, pre-compute which file the diff should show afterward,
       -- while the affected files are still present in ordered_file_list().
       local target ---@type FileEntry?
-      if view.panel.hide_selected then
+      if hides_reviewed(view) then
         if will_hide then
           -- The affected files vanish on render. Land on the nearest file that
           -- stays visible (searching forward, then backward), skipping the
@@ -376,7 +388,7 @@ return function(view)
         end
       end)
 
-      if view.panel.hide_selected then
+      if hides_reviewed(view) then
         -- Selection only changes which existing components render a line;
         -- redraw them without rebuilding and retaining another component tree.
         view.panel:render()
@@ -913,11 +925,8 @@ return function(view)
       end
     end,
     toggle_hide_selected = function()
-      if not view.panel:is_focused() then
-        return
-      end
-      local files = not view.panel.hide_selected and view.panel:ordered_file_list() or nil
-      local cur_file = view.panel.cur_file
+      local files = not hides_reviewed(view) and view.panel:ordered_file_list() or nil
+      local cur_file = current_entry(view)
       view.panel:toggle_hide_selected()
       view.panel:render()
       view.panel:redraw()
@@ -933,7 +942,7 @@ return function(view)
       else
         reconstrain_empty_panel(view.panel)
       end
-      local state = view.panel.hide_selected and "hidden" or "shown"
+      local state = hides_reviewed(view) and "hidden" or "shown"
       utils.info(("Reviewed files: %s"):format(state))
       -- Persist the new hide state immediately (if persistence is enabled).
       view:_save_selections_now()

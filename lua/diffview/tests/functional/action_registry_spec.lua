@@ -151,6 +151,37 @@ describe("diffview.runtime.action_registry", function()
       assert.are.equal(fake_view, seen_view)
     end)
 
+    it("passes view to command-style execute functions", function()
+      local seen_view
+      registry.register({
+        id = "test.command",
+        label = "",
+        desc = "",
+        category = "diff",
+        pass_view = true,
+        execute = function(view)
+          seen_view = view
+        end,
+      })
+      local fake_view = { kind = "diff" }
+      registry.execute("test.command", fake_view)
+      assert.equals(fake_view, seen_view)
+    end)
+
+    it("keeps legacy actions working for views without a command dispatcher", function()
+      local seen_opts
+      local register = require("diffview.actions.register")({
+        refresh_files = function(opts)
+          seen_opts = opts
+        end,
+      })
+      register.command("file.refresh_files", "Refresh", "", "file", "refresh")
+
+      registry.execute("file.refresh_files", {}, { force = true })
+
+      assert.same({ force = true }, seen_opts)
+    end)
+
     it("returns the disabled reason", function()
       registry.register({
         id = "test.reason",

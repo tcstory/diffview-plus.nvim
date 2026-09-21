@@ -46,6 +46,7 @@ local ActionCategory = {
 ---@field danger?    boolean             # If true, UI asks for confirmation before execute
 ---@field confirm?   string|fun(view: any, ...): string # Confirmation prompt for dangerous actions.
 ---@field surfaces?  string[]            # Suggested UI surfaces, e.g. toolbar or palette.
+---@field pass_view? boolean              # Pass the resolved view to execute() as its first argument.
 
 ---@class diffview.ActionRegistry
 local M = {}
@@ -116,6 +117,9 @@ function M.execute(id, view, ...)
     if not require("diffview.runtime.confirm").ask(prompt) then
       return false, "cancelled"
     end
+  end
+  if spec.pass_view then
+    return spec.execute(view, ...)
   end
   return spec.execute(...)
 end

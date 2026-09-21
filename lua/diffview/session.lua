@@ -250,9 +250,12 @@ local function capture_view(view)
   -- restore. `FileHistoryPanel:cur_file()` is a method, and its active
   -- file is meaningful only inside an entry, so we don't record one.
   local cur_file_path
-  if rec.kind == "diffview_open" and view.panel and view.panel.cur_file then
-    cur_file_path = view.panel.cur_file.path
-    entry.selected_file = cur_file_path
+  if rec.kind == "diffview_open" then
+    local cur_file = view.store and view.store.current_entry or view.panel and view.panel.cur_file
+    if cur_file then
+      cur_file_path = cur_file.path
+      entry.selected_file = cur_file_path
+    end
   elseif rec.kind == "file_history" and view.panel and view.panel.cur_file then
     local ok, file = pcall(view.panel.cur_file, view.panel)
     if ok and file and file.path then

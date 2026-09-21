@@ -7,6 +7,16 @@ local pl = utils.path
 
 local selection_signs_ns = api.nvim_create_namespace("diffview_selection_signs")
 
+---@param panel FilePanel|table
+---@param file FileEntry
+---@return boolean
+local function file_visible(panel, file)
+  if panel.is_visible then
+    return panel:is_visible(file)
+  end
+  return not (panel.hide_selected and panel:is_selected(file))
+end
+
 ---Check whether any configured selection sign is wide (>= 2 display cells).
 ---When true, sign_column mode adds a padding space between the sign column
 ---and the buffer text so that wide characters don't crowd the status letter.
@@ -78,7 +88,7 @@ end
 ---@return string
 local function section_counter(panel, kind)
   local vis, tot = panel:count_visible(kind)
-  if panel.hide_selected and vis < tot then
+  if (panel.store.hide_reviewed or panel.store.filter ~= "") and vis < tot then
     return "(" .. vis .. "/" .. tot .. ")"
   end
   return "(" .. tot .. ")"
@@ -95,7 +105,7 @@ local function dir_all_hidden(panel, comp)
   end
   for _, child in ipairs(items.components) do
     if child.name == "file" then
-      if not panel:is_selected(child.context) then
+      if file_visible(panel, child.context) then
         return false
       end
     elseif child.name == "directory" then
@@ -117,7 +127,7 @@ local function render_file(conf, panel, comp, show_path, depth, sign_pad)
   ---@type FileEntry
   local file = comp.context
 
-  if panel.hide_selected and panel:is_selected(file) then
+  if not file_visible(panel, file) then
     return
   end
 
@@ -234,7 +244,7 @@ local function render_file_tree_recurse(conf, panel, depth, comp, sign_pad)
     return
   end
 
-  if panel.hide_selected and dir_all_hidden(panel, comp) then
+  if (panel.store.hide_reviewed or panel.store.filter ~= "") and dir_all_hidden(panel, comp) then
     return
   end
 
@@ -473,6 +483,11 @@ local function render_panel(panel)
     comp:add_line()
   end
 
+  if panel.store.filter ~= "" then
+    comp:add_text("Filter: ", "DiffviewFilePanelPath")
+    comp:add_line(panel.store.filter, "DiffviewFilePanelTitle")
+  end
+
   if panel.is_loading then
     comp:add_line("  Fetching changes...", "DiffviewDim1")
     return
@@ -526,7 +541,7 @@ local function render_panel(panel)
 
   -- Footer hint, rendered below the file trees so it grows/shrinks at the
   -- bottom instead of pushing the trees down when it appears.
-  if panel.hide_selected then
+  if panel.store.hide_reviewed then
     local hidden = panel:count_selected()
     if hidden > 0 then
       comp = panel.components.hidden_hint.comp

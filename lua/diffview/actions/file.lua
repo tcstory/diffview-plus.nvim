@@ -1,5 +1,6 @@
 return function(_, R)
   local Capability = require("diffview.vcs.capability").Capability
+  local Command = require("diffview.scene.views.diff.command")
   local C = R.category.FILE
   local specs = {
     { "file.goto_file", "Go to file", "Open the current file.", "goto_file" },
@@ -42,25 +43,45 @@ return function(_, R)
       "Show commit details for this file.",
       "open_commit_log_file",
     },
-    { "file.refresh_files", "Refresh files", "Refresh files and statistics.", "refresh_files" },
     { "file.toggle_untracked", "Toggle untracked", "Toggle untracked files.", "toggle_untracked" },
-    {
-      "file.toggle_flatten_dirs",
-      "Flatten directories",
-      "Toggle flattened directories.",
-      "toggle_flatten_dirs",
-    },
-    { "file.listing_style", "Listing style", "Cycle the file listing style.", "listing_style" },
   }
   for _, spec in ipairs(specs) do
     R.direct(spec[1], spec[2], spec[3], C, spec[4])
   end
-  R.direct(
+  R.command(
+    "file.refresh_files",
+    "Refresh files",
+    "Refresh files and statistics.",
+    C,
+    Command.Type.REFRESH
+  )
+  R.command(
+    "file.filter_files",
+    "Filter files",
+    "Filter the file panel by path.",
+    C,
+    Command.Type.FILTER
+  )
+  R.command(
+    "file.toggle_flatten_dirs",
+    "Flatten directories",
+    "Toggle flattened directories.",
+    C,
+    Command.Type.FLATTEN_DIRS
+  )
+  R.command(
+    "file.listing_style",
+    "Listing style",
+    "Cycle the file listing style.",
+    C,
+    Command.Type.LISTING_STYLE
+  )
+  R.command(
     "file.restore_entry",
     "Restore entry",
     "Restore the selected entry.",
     C,
-    "restore_entry",
+    Command.Type.RESTORE,
     R.contextual(function(view)
       return view and view.adapter and view.adapter:supports(Capability.RESTORE)
     end, "The current VCS adapter cannot restore files"),

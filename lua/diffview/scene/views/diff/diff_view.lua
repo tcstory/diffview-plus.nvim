@@ -17,6 +17,8 @@ local utils = lazy.require("diffview.utils") ---@module "diffview.utils"
 local vcs_utils = lazy.require("diffview.vcs.utils") ---@module "diffview.vcs.utils"
 local File = lazy.access("diffview.vcs.file", "File") ---@type vcs.File|LazyModule
 local Capability = require("diffview.vcs.capability").Capability
+local DiffCommand = require("diffview.scene.views.diff.command")
+local DiffStore = require("diffview.scene.views.diff.store").DiffStore
 
 local api = vim.api
 local await = async.await
@@ -49,6 +51,7 @@ local same_rev = lazy.access(rev_lib, "same_rev") --[[@as fun(a: Rev?, b: Rev?):
 ---@field panel FilePanel
 ---@field commit_log_panel CommitLogPanel
 ---@field files FileDict
+---@field store DiffStore
 ---@field file_idx integer
 ---@field merge_ctx? vcs.MergeContext
 ---@field merge_session? MergeSession
@@ -63,10 +66,21 @@ local same_rev = lazy.access(rev_lib, "same_rev") --[[@as fun(a: Rev?, b: Rev?):
 ---@field watcher uv_fs_poll_t # UV fs poll handle.
 local DiffView = oop.create_class("DiffView", StandardView.__get())
 
+---Return the canonical state store, adopting a panel-created store for
+---compatibility with custom/test views that construct their panel first.
+---@return DiffStore
+function DiffView:_state_store()
+  if not self.store then
+    self.store = self.panel and self.panel.store or DiffStore.new(self.files)
+  end
+  return self.store
+end
+
 ---DiffView constructor
 function DiffView:init(opt)
   self.valid = false
   self.files = FileDict()
+  self.store = DiffStore.new(self.files)
   self.adapter = opt.adapter
   self.path_args = opt.path_args
   self.rev_arg = opt.rev_arg
@@ -84,9 +98,11 @@ function DiffView:init(opt)
       self.adapter,
       self.files,
       self.path_args,
-      self.adapter:rev_to_panel_name(self.rev_arg, self.left, self.right)
+      self.adapter:rev_to_panel_name(self.rev_arg, self.left, self.right),
+      self.store
     ),
   })
+  self.panel.view = self
 
   self.attached_bufs = {}
   DiffView._seed_cursor_map_from_selection(self.cursor_map, self.options)
@@ -154,7 +170,7 @@ function DiffView:post_open()
 
     start_refresh = function()
       refreshing = true
-      self:update_files(nil, function(err)
+      self:dispatch_command({ type = DiffCommand.Type.REFRESH, source = "index" }, function(err)
         -- `update_files_impl` invokes its callback with an `err` table on
         -- cancellation (view closing / off-tabpage) or git failure, and
         -- does *not* emit "files_updated" in those paths. Leaving
@@ -259,7 +275,7 @@ function DiffView:post_open()
       pattern = "GitSignsChanged",
       callback = function()
         if not self.closing:check() and self:is_cur_tabpage() then
-          self:update_files()
+          self:dispatch_command({ type = DiffCommand.Type.REFRESH, source = "gitsigns" })
         end
       end,
     })
@@ -268,7 +284,7 @@ function DiffView:post_open()
   vim.schedule(function()
     self:file_safeguard()
     if self.files:len() == 0 then
-      self:update_files()
+      self:dispatch_command({ type = DiffCommand.Type.REFRESH, source = "user" })
     else
       -- Files were pre-populated (e.g., by an integrating plugin via
       -- CDiffView). Clear the loading state so the panel can render.
@@ -288,6 +304,7 @@ end
 ---@param old_entry FileEntry
 ---@diagnostic disable-next-line: unused-local
 function DiffView:file_open_post(e, new_entry, old_entry)
+  self.store:set_current(new_entry)
   if new_entry.layout:is_nulled() then
     return
   end
@@ -348,12 +365,9 @@ function DiffView:_init_selection_events()
 
     -- Load previously saved selections and hide state.
     local saved, saved_hide = selection_store.load(self._selection_scope_key)
-    for _, key in ipairs(saved) do
-      self.panel.selected_files[key] = true
-    end
-    if saved_hide then
-      self.panel.hide_selected = true
-    end
+    self.store:load_reviewed(saved)
+    self.panel.selected_files = self.store.reviewed
+    self.panel:set_hide_reviewed(saved_hide, false)
 
     -- Debounced save (500ms trailing).
     self._save_selections = debounce.debounce_trailing(500, false, function()
@@ -377,9 +391,11 @@ function DiffView:_save_selections_now()
     return
   end
   local selection_store = require("diffview.selection_store")
-  local keys = vim.tbl_keys(self.panel.selected_files)
+  self.panel:sync_store()
+  local store = self:_state_store()
+  local keys = vim.tbl_keys(store.reviewed)
   table.sort(keys)
-  selection_store.save(self._selection_scope_key, keys, self.panel.hide_selected)
+  selection_store.save(self._selection_scope_key, keys, store.hide_reviewed)
 end
 
 ---Replace the revision range for this view in-place and refresh the file
@@ -423,9 +439,9 @@ function DiffView:set_revs(new_rev_arg, opts)
     if old_scope ~= self._selection_scope_key then
       local saved, saved_hide = selection_store.load(self._selection_scope_key)
       for _, key in ipairs(saved) do
-        self.panel.selected_files[key] = true
+        self:_state_store().reviewed[key] = true
       end
-      self.panel.hide_selected = saved_hide
+      self.panel:set_hide_reviewed(saved_hide, false)
 
       -- Persist under the new scope key so selections survive a restart.
       -- The update_files() machinery will trigger another save via
@@ -770,7 +786,7 @@ local update_files_impl = debounce.debounce_trailing(
 
     perf:lap("received new file list")
 
-    local prev_cur_file = self.panel.cur_file
+    local prev_cur_file = self.store.current_entry
 
     local files = {
       { cur_files = self.files.conflicting, new_files = new_files.conflicting },
@@ -870,7 +886,7 @@ local update_files_impl = debounce.debounce_trailing(
                 new_file:convert_layout(old_file.layout.class --[[@as Layout ]])
               end
 
-              if self.panel.cur_file == old_file then
+              if self.store.current_entry == old_file then
                 self.panel:set_cur_file(new_file)
               end
 
@@ -914,9 +930,9 @@ local update_files_impl = debounce.debounce_trailing(
         elseif opr == EditToken.DELETE then
           local cur_file = v.cur_files[ai]
           if cur_file then
-            if self.panel.cur_file == cur_file then
+            if self.store.current_entry == cur_file then
               local file_list = self.panel:ordered_file_list()
-              if file_list[1] == self.panel.cur_file then
+              if file_list[1] == self.store.current_entry then
                 self.panel:set_cur_file(nil)
               else
                 self.panel:set_cur_file(self.panel:prev_file())
@@ -938,9 +954,9 @@ local update_files_impl = debounce.debounce_trailing(
           local new_file = v.new_files[bi]
 
           if cur_file then
-            if self.panel.cur_file == cur_file then
+            if self.store.current_entry == cur_file then
               local file_list = self.panel:ordered_file_list()
-              if file_list[1] == self.panel.cur_file then
+              if file_list[1] == self.store.current_entry then
                 self.panel:set_cur_file(nil)
               else
                 self.panel:set_cur_file(self.panel:prev_file())
@@ -984,9 +1000,9 @@ local update_files_impl = debounce.debounce_trailing(
     perf:lap("panel redrawn")
     self.panel:reconstrain_cursor()
 
-    local prev_panel_cur_file = self.panel.cur_file
+    local prev_panel_cur_file = self.store.current_entry
 
-    if utils.vec_indexof(self.panel:ordered_file_list(), self.panel.cur_file) == -1 then
+    if utils.vec_indexof(self.panel:ordered_file_list(), self.store.current_entry) == -1 then
       self.panel:set_cur_file(nil)
     end
 
@@ -1004,12 +1020,12 @@ local update_files_impl = debounce.debounce_trailing(
     -- so the panel's active-file highlight matches the file `set_file` is
     -- about to open. In the common refresh path `cur_file` is unchanged
     -- and the earlier render still reflects the correct state.
-    if self.panel.cur_file ~= prev_panel_cur_file then
+    if self.store.current_entry ~= prev_panel_cur_file then
       self.panel:render()
       self.panel:redraw()
     end
 
-    local next_file = self.panel.cur_file or self.panel:next_file()
+    local next_file = self.store.current_entry or self.panel:next_file()
 
     -- Only re-open the current entry when something actually changed:
     -- first init, cur_file identity changed, or buffers were invalidated.
@@ -1057,11 +1073,19 @@ function DiffView:update_files(opts, callback)
   return update_files_impl(self, opts, callback)
 end
 
+---Dispatch an explicit view command. Watchers, toolbars, and actions share
+---this entry point, which makes refresh sources and state mutations auditable.
+---@param command DiffCommand
+---@param callback? fun(err?: string[])
+function DiffView:dispatch_command(command, callback)
+  return DiffCommand.execute(self, command, callback)
+end
+
 ---Ensures there are files to load, and loads the null buffer otherwise.
 ---@return boolean
 function DiffView:file_safeguard()
   if self.files:len() == 0 then
-    local cur = self.panel.cur_file
+    local cur = self.store.current_entry
 
     if cur then
       cur.layout:detach_files()
@@ -1110,7 +1134,7 @@ function DiffView:infer_cur_file(allow_dir)
 
     return item
   else
-    return self.panel.cur_file
+    return self.store.current_entry
   end
 end
 

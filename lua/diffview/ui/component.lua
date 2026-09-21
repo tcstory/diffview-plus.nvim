@@ -23,6 +23,12 @@ local function readonly(value)
   if type(value) ~= "table" then
     return value
   end
+  -- Components may be nested after they have already been frozen. Preserve
+  -- the existing proxy; copying it with pairs() would lose its weak-map
+  -- backing on LuaJIT, where __pairs is not guaranteed to be consulted.
+  if values[value] then
+    return value
+  end
   local copy = {}
   for key, item in pairs(value) do
     copy[key] = readonly(item)

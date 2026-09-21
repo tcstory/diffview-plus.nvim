@@ -1207,6 +1207,12 @@ end
 ---hasn't changed (the default `R` behaviour).
 ---@param opts? DiffviewRefreshFilesOpts
 function M.refresh_files(opts)
+  local view = lib.get_current_view()
+  local dispatch = view and (view --[[@as any]]).dispatch_command
+  if type(dispatch) == "function" then
+    local command = require("diffview.scene.views.diff.command")
+    return dispatch(view, { type = command.Type.REFRESH, source = "user", opts = opts })
+  end
   require("diffview").emit("refresh_files", opts)
 end
 
@@ -1344,9 +1350,36 @@ local action_tags = {
   unstage_all = "working_tree_only",
 }
 
+local command_types = {
+  stage_all = "STAGE_ALL",
+  unstage_all = "UNSTAGE_ALL",
+  toggle_stage_entry = "TOGGLE_STAGE",
+  restore_entry = "RESTORE",
+  listing_style = "LISTING_STYLE",
+  toggle_flatten_dirs = "FLATTEN_DIRS",
+  toggle_hide_selected = "HIDE_REVIEWED",
+}
+
 for _, name in ipairs(action_names) do
-  M[name] = function()
-    require("diffview").emit(name)
+  local command_key = command_types[name]
+  if command_key then
+    M[name] = function(opts)
+      local view = lib.get_current_view()
+      local dispatch = view and (view --[[@as any]]).dispatch_command
+      if type(dispatch) == "function" then
+        local command = require("diffview.scene.views.diff.command")
+        return dispatch(view, {
+          type = command.Type[command_key],
+          source = "user",
+          opts = opts,
+        })
+      end
+      require("diffview").emit(name, opts)
+    end
+  else
+    M[name] = function()
+      require("diffview").emit(name)
+    end
   end
   if action_tags[name] then
     tag(M[name], action_tags[name])

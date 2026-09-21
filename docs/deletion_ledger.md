@@ -169,6 +169,32 @@ deletion is expected.
 
 ---
 
+## Phase 7 — DiffView and file panel
+
+### File-panel-owned review and current-entry state
+
+| Field | Value |
+|-------|-------|
+| **Status** | ✅ Replaced; read aliases retained for integrations until Phase 10 |
+| **Files** | `lua/diffview/scene/views/diff/{diff_view,file_panel,listeners}.lua` |
+| **Reason** | Files, current entry, reviewed keys, hide mode, and filtering were mutated independently by the view and panel, making refresh and navigation races difficult to reason about. |
+| **Replacement** | `DiffStore` owns the state and exposes explicit mutation/subscription methods; panel fields are projections. |
+| **Phase** | 7 |
+| **Deleted in** | Phase 7 completion commit (direct production mutations); compatibility aliases scheduled for Phase 10 |
+
+### External listeners calling `update_files` directly
+
+| Field | Value |
+|-------|-------|
+| **Status** | ✅ Replaced for index and GitSigns sources |
+| **Files** | `lua/diffview/scene/views/diff/diff_view.lua` |
+| **Reason** | A raw refresh call loses the source and lets external callbacks bypass the same command boundary used by actions. |
+| **Replacement** | Typed `DiffCommand` refresh intents with `user`, `index`, `gitsigns`, or `buffer` source metadata. |
+| **Phase** | 7 |
+| **Deleted in** | Phase 7 completion commit |
+
+---
+
 ## Phase 10 — Final cleanup
 
 ### Self-built OOP framework (`oop.lua`, `Object:extend`, etc.)

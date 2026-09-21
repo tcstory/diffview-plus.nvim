@@ -19,6 +19,16 @@ describe("UI components and router", function()
     end)
   end)
 
+  it("preserves frozen children when components are nested", function()
+    local child =
+      component.new({ identity = "child", text = "Refresh", action = "file.refresh_files" })
+    local root = component.new({ identity = "root", children = { child } })
+    local nested = component.children(root)[1]
+
+    assert.equals("Refresh", component.text(nested))
+    assert.equals("file.refresh_files", nested.action)
+  end)
+
   it("calculates hit zones for narrow, wide, combining and RTL text", function()
     local spans = router.segment_spans({
       { text = "x" },

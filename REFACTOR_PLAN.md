@@ -489,12 +489,12 @@ require("diffview").setup({
 
 ### Phase 7：DiffView 与文件面板迁移
 
-- [ ] 新 Store 接管 files、selection、reviewed/hidden、current entry。
-- [ ] 文件 panel 改用新 component/renderer/router。
-- [ ] stage/unstage/restore/refresh 迁移到 action command。
-- [ ] filter、listing style、flatten dirs 改为可见 UI control。
-- [ ] layout 和打开方式进入 action palette/toolbar。
-- [ ] gitsigns/index watcher 只派发明确 refresh intent。
+- [x] 新 Store 接管 files、selection、reviewed/hidden、current entry。
+- [x] 文件 panel 改用新 component/renderer/router。
+- [x] stage/unstage/restore/refresh 迁移到 action command。
+- [x] filter、listing style、flatten dirs 改为可见 UI control。
+- [x] layout 和打开方式进入 action palette/toolbar。
+- [x] gitsigns/index watcher 只派发明确 refresh intent。
 
 验收：日常 review 可只用鼠标完成；默认不要求记住 stage/restore/layout 快捷键。
 

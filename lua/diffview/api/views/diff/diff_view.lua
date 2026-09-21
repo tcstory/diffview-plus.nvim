@@ -72,9 +72,9 @@ function CDiffView:init(opt)
     end
     self.files:update_file_trees()
 
-    if self.panel.cur_file then
+    if self.store.current_entry then
       vim.schedule(function()
-        self:set_file(self.panel.cur_file, false, true)
+        self:set_file(self.store.current_entry, false, true)
       end)
     end
   end

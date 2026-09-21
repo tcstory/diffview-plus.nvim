@@ -3,6 +3,10 @@ local oop = require("diffview.oop")
 local renderer = require("diffview.renderer")
 local utils = require("diffview.utils")
 local Panel = require("diffview.ui.panel").Panel
+local component = require("diffview.ui.component")
+local component_renderer = require("diffview.ui.component_renderer")
+local registry = require("diffview.runtime.action_registry")
+local DiffStore = require("diffview.scene.views.diff.store").DiffStore
 local api = vim.api
 local M = {}
 
@@ -21,6 +25,8 @@ local M = {}
 ---@field selected_files table<string, true>
 ---@field hide_selected boolean
 ---@field on_selection_changed fun(selected_files: table<string, true>)?
+---@field store DiffStore
+---@field view? DiffView
 local FilePanel = oop.create_class("FilePanel", Panel)
 
 FilePanel.winopts = vim.tbl_extend("force", Panel.winopts, {
@@ -45,20 +51,25 @@ FilePanel.bufopts = vim.tbl_extend("force", Panel.bufopts, {
 ---@param adapter VCSAdapter
 ---@param files FileEntry[]
 ---@param path_args string[]
-function FilePanel:init(adapter, files, path_args, rev_pretty_name)
+---@param rev_pretty_name? string
+---@param store? DiffStore
+function FilePanel:init(adapter, files, path_args, rev_pretty_name, store)
   local conf = config.get_config()
   self:super({
     config = conf.file_panel.win_config,
     bufname = "DiffviewFilePanel",
   })
   self.adapter = adapter
-  self.files = files
+  self.store = store or DiffStore.new(files)
+  self.files = self.store.files
   self.path_args = path_args
   self.rev_pretty_name = rev_pretty_name
   self.listing_style = conf.file_panel.listing_style
   self.tree_options = conf.file_panel.tree_options
-  self.selected_files = {}
-  self.hide_selected = false
+  -- Compatibility aliases for integrations that still inspect panel fields;
+  -- mutations go through DiffStore-backed methods below.
+  self.selected_files = self.store.reviewed
+  self.hide_selected = self.store.hide_reviewed
   self.is_loading = true
 
   self:on_autocmd("BufNew", {
@@ -163,11 +174,17 @@ end
 
 ---@return FileEntry[]
 function FilePanel:ordered_file_list()
+  local function visible(file)
+    if self.is_visible then
+      return self:is_visible(file)
+    end
+    return not (self.hide_selected and self.is_selected and self:is_selected(file))
+  end
   if self.listing_style == "list" then
     local list = {}
 
     for _, file in self.files:iter() do
-      if not (self.hide_selected and self:is_selected(file)) then
+      if visible(file) then
         list[#list + 1] = file
       end
     end
@@ -182,7 +199,7 @@ function FilePanel:ordered_file_list()
 
     local result = {}
     for _, node in ipairs(nodes) do
-      if node.data and not (self.hide_selected and self:is_selected(node.data)) then
+      if node.data and visible(node.data) then
         result[#result + 1] = node.data
       end
     end
@@ -193,7 +210,17 @@ end
 ---Toggle the hide-selected filter.
 ---When active, marked (reviewed) files are hidden from the file panel.
 function FilePanel:toggle_hide_selected()
-  self.hide_selected = not self.hide_selected
+  self:set_hide_reviewed(not self.store.hide_reviewed)
+end
+
+---@param hidden boolean
+---@param notify? boolean
+function FilePanel:set_hide_reviewed(hidden, notify)
+  self.store:set_hide_reviewed(hidden)
+  self.hide_selected = self.store.hide_reviewed
+  if notify ~= false then
+    self:_notify_selection_changed()
+  end
 end
 
 ---Count selected files across every kind.
@@ -201,7 +228,7 @@ end
 function FilePanel:count_selected()
   local count = 0
   for _, file in self.files:iter() do
-    if self:is_selected(file) then
+    if self.store:is_reviewed(file) then
       count = count + 1
     end
   end
@@ -217,16 +244,13 @@ function FilePanel:count_visible(kind)
     return 0, 0
   end
   local total = #files
-  if not self.hide_selected then
-    return total, total
-  end
-  local hidden = 0
+  local visible = 0
   for _, file in ipairs(files) do
-    if self:is_selected(file) then
-      hidden = hidden + 1
+    if self:is_visible(file) then
+      visible = visible + 1
     end
   end
-  return total - hidden, total
+  return visible, total
 end
 
 function FilePanel:set_cur_file(file)
@@ -235,6 +259,9 @@ function FilePanel:set_cur_file(file)
   end
 
   self.cur_file = file
+  if self.store then
+    self.store:set_current(file)
+  end
   if self.cur_file then
     self.cur_file:set_active(true)
   end
@@ -502,7 +529,22 @@ end
 ---@param file FileEntry
 ---@return string
 function FilePanel.selection_key(file)
-  return file.kind .. ":" .. file.path
+  return DiffStore.key(file)
+end
+
+---Import writes made through the Phase 6 compatibility fields. New code uses
+---the store directly; this keeps third-party panel integrations working while
+---the aliases remain available through Phase 10.
+function FilePanel:sync_store()
+  if self.files ~= self.store.files then
+    self.store.files = self.files
+  end
+  if self.selected_files ~= self.store.reviewed then
+    self.store.reviewed = self.selected_files
+  end
+  if self.hide_selected ~= self.store.hide_reviewed then
+    self.store.hide_reviewed = self.hide_selected == true
+  end
 end
 
 ---Suppress selection-change notifications for the duration of `fn`, then
@@ -537,33 +579,39 @@ end
 ---Select a file entry.
 ---@param file FileEntry
 function FilePanel:select_file(file)
-  self.selected_files[FilePanel.selection_key(file)] = true
+  self.store:set_reviewed(file, true)
+  self.selected_files = self.store.reviewed
   self:_notify_selection_changed()
 end
 
 ---Deselect a file entry.
 ---@param file FileEntry
 function FilePanel:deselect_file(file)
-  self.selected_files[FilePanel.selection_key(file)] = nil
+  self.store:set_reviewed(file, false)
+  self.selected_files = self.store.reviewed
   self:_notify_selection_changed()
 end
 
 ---Toggle selection for a file entry.
 ---@param file FileEntry
 function FilePanel:toggle_selection(file)
-  local key = FilePanel.selection_key(file)
-  if self.selected_files[key] then
-    self.selected_files[key] = nil
-  else
-    self.selected_files[key] = true
-  end
+  self.store:toggle_reviewed(file)
+  self.selected_files = self.store.reviewed
   self:_notify_selection_changed()
 end
 
 ---@param file FileEntry
 ---@return boolean
 function FilePanel:is_selected(file)
-  return self.selected_files[FilePanel.selection_key(file)] == true
+  self:sync_store()
+  return self.store:is_reviewed(file)
+end
+
+---@param file FileEntry
+---@return boolean
+function FilePanel:is_visible(file)
+  self:sync_store()
+  return self.store:is_visible(file)
 end
 
 ---Return true when at least one file is selected.
@@ -615,17 +663,9 @@ end
 
 ---Remove selections for files that no longer exist.
 function FilePanel:prune_selections()
-  local valid_keys = {}
-  for _, file in self.files:iter() do
-    valid_keys[FilePanel.selection_key(file)] = true
-  end
-  local changed = false
-  for key in pairs(self.selected_files) do
-    if not valid_keys[key] then
-      self.selected_files[key] = nil
-      changed = true
-    end
-  end
+  self:sync_store()
+  local changed = self.store:prune_reviewed()
+  self.selected_files = self.store.reviewed
   if changed then
     self:_notify_selection_changed()
   end
@@ -633,11 +673,51 @@ end
 
 ---Clear all file selections.
 function FilePanel:clear_selections()
-  local had_selections = next(self.selected_files) ~= nil
-  self.selected_files = {}
-  if had_selections then
+  if self.store:clear_reviewed() then
+    self.selected_files = self.store.reviewed
     self:_notify_selection_changed()
   end
+end
+
+local toolbar_controls = {
+  { "view.action_palette", "Actions" },
+  { "diff.toggle_select_entry", "Review" },
+  { "diff.toggle_hide_selected", "Hide" },
+  { "file.filter_files", "Filter" },
+  { "file.listing_style", "List/Tree" },
+  { "file.toggle_flatten_dirs", "Flatten" },
+  { "diff.toggle_stage_entry", "Stage" },
+  { "file.restore_entry", "Restore" },
+  { "file.refresh_files", "Refresh" },
+  { "layout.cycle_layout", "Layout" },
+  { "file.goto_file_edit", "Edit" },
+  { "file.goto_file_split", "Split" },
+  { "file.goto_file_tab", "Tab" },
+}
+
+---Build the visible, mouse-clickable file-panel controls from immutable
+---components and ActionRegistry availability.
+---@return diffview.Component
+function FilePanel:toolbar_component()
+  local children = {}
+  for _, control in ipairs(toolbar_controls) do
+    local id, label = control[1], control[2]
+    local available, reason = registry.availability(id, self.view)
+    if id == "diff.toggle_hide_selected" and self.store.hide_reviewed then
+      label = "Show"
+    elseif id == "file.filter_files" and self.store.filter ~= "" then
+      label = "Filter*"
+    end
+    children[#children + 1] = component.new({
+      identity = "file-panel-" .. id,
+      text = "[" .. label .. "]",
+      hl = "DiffviewFilePanelTitle",
+      action = id,
+      disabled = not available,
+      tooltip = available and assert(registry.get(id)).desc or reason,
+    })
+  end
+  return component.new({ identity = "file-panel-toolbar", children = children })
 end
 
 ---@override
@@ -659,6 +739,17 @@ end
 function FilePanel:redraw()
   FilePanel.super_class.redraw(self)
   require("diffview.scene.views.diff.render").place_selection_signs(self)
+  -- MergeView owns a purpose-built transactional winbar with collapse and
+  -- apply controls. Phase 7's general review toolbar must not replace it.
+  if self.view and self.view.merge_session then
+    return
+  end
+  local winbar = component_renderer.winbar(self:toolbar_component(), self)
+  for _, winid in ipairs(self:cursor_winids()) do
+    if api.nvim_win_is_valid(winid) then
+      vim.wo[winid].winbar = winbar
+    end
+  end
 end
 
 M.FilePanel = FilePanel
