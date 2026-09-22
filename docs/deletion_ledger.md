@@ -195,6 +195,32 @@ deletion is expected.
 
 ---
 
+## Phase 8 — FileHistory
+
+### Pin-local layout subclasses
+
+| Field | Value |
+|-------|-------|
+| **Status** | ✅ Production dependency removed; compatibility modules retained until Phase 10 |
+| **Files** | `lua/diffview/scene/layouts/{diff_1_pinned,diff_1_inline_pinned,diff_2_hor_pinned,diff_2_ver_pinned}.lua` |
+| **Reason** | Encoding one view mode in four layout classes multiplied ownership and null-side rules across every orientation. |
+| **Replacement** | `FileHistoryStore.view` owns the mode and pinned files; ordinary layout instances receive borrowed-symbol state from `FileEntry`. |
+| **Phase** | 8 |
+| **Deleted in** | Phase 10 compatibility removal |
+
+### Full component rebuild on streamed history batches
+
+| Field | Value |
+|-------|-------|
+| **Status** | ✅ Replaced |
+| **Files** | `lua/diffview/scene/views/file_history/file_history_panel.lua` |
+| **Reason** | Recreating every component on each streamed batch made long histories scale poorly and invalidated component identity. |
+| **Replacement** | Stable history component root with append-only entry component creation during a query generation. |
+| **Phase** | 8 |
+| **Deleted in** | Phase 8 completion commit |
+
+---
+
 ## Phase 10 — Final cleanup
 
 ### Self-built OOP framework (`oop.lua`, `Object:extend`, etc.)

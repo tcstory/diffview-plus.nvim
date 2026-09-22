@@ -1,5 +1,11 @@
 local async = require("diffview.async")
 local lazy = require("diffview.lazy")
+local component = require("diffview.ui.component")
+local component_renderer = require("diffview.ui.component_renderer")
+local registry = require("diffview.runtime.action_registry")
+local progress_overlay = require("diffview.ui.progress_overlay")
+local FileHistoryStore = require("diffview.scene.views.file_history.store").FileHistoryStore
+local QueryStatus = require("diffview.scene.views.file_history.store").QueryStatus
 
 local FHOptionPanel = lazy.access("diffview.scene.views.file_history.option_panel", "FHOptionPanel") ---@type FHOptionPanel|LazyModule
 local JobStatus = lazy.access("diffview.vcs.utils", "JobStatus") ---@type JobStatus|LazyModule
@@ -27,12 +33,21 @@ local perf_render = PerfTimer("[FileHistoryPanel] render")
 ---@type PerfTimer
 local perf_update = PerfTimer("[FileHistoryPanel] update")
 
+local function pin_local(parent)
+  return parent.is_pin_local and parent:is_pin_local() or parent.pin_local == true
+end
+
+local function pinned_path(parent)
+  return parent.get_pinned_path and parent:get_pinned_path() or parent.pinned_path
+end
+
 ---@alias FileHistoryPanel.CurItem { [1]: LogEntry, [2]: FileEntry }
 
 ---@class FileHistoryPanel : Panel
 ---@field parent FileHistoryView
 ---@field adapter VCSAdapter
 ---@field entries LogEntry[]
+---@field store FileHistoryStore
 ---@field rev_range RevRange
 ---@field log_options ConfigLogOptions
 ---@field cur_item FileHistoryPanel.CurItem
@@ -46,6 +61,11 @@ local perf_update = PerfTimer("[FileHistoryPanel] update")
 ---@field help_mapping string
 ---@field components CompStruct
 ---@field constrain_cursor function
+---@field _progress_id? integer
+---@field _progress_scheduled? boolean
+---@field _store_unsubscribe? function
+---@field _component_entry_count integer
+---@field _components_dirty boolean
 local FileHistoryPanel = oop.create_class("FileHistoryPanel", Panel.__get())
 
 FileHistoryPanel.winopts = vim.tbl_extend("force", Panel.winopts, {
@@ -68,7 +88,8 @@ FileHistoryPanel.bufopts = vim.tbl_extend("force", Panel.bufopts, {
 ---@class FileHistoryPanel.init.Opt
 ---@field parent FileHistoryView
 ---@field adapter VCSAdapter
----@field entries LogEntry[]
+---@field entries? LogEntry[]
+---@field store? FileHistoryStore
 ---@field log_options LogOptions
 
 ---FileHistoryPanel constructor.
@@ -83,12 +104,33 @@ function FileHistoryPanel:init(opt)
 
   self.parent = opt.parent
   self.adapter = opt.adapter
-  self.entries = opt.entries
+  self.store = opt.store
+    or FileHistoryStore.new({
+      pin_local = opt.parent.pin_local,
+      pinned_path = opt.parent.pinned_path,
+    })
+  if opt.entries then
+    self.store.entries = opt.entries
+  end
+  self.entries = self.store.entries
   self.cur_item = {}
-  self.single_file = opt.entries[1] and opt.entries[1].single_file
+  self.single_file = self.entries[1] and self.entries[1].single_file
   self.work_pool = WorkPool()
   self.shutdown = Signal()
   self.updating = false
+  self._component_entry_count = 0
+  self._components_dirty = true
+  self._store_unsubscribe = self.store:subscribe(function(_, reason)
+    if reason == "query" or (reason == "append" and self.store.query.received % 25 == 0) then
+      if not self._progress_scheduled then
+        self._progress_scheduled = true
+        vim.schedule(function()
+          self._progress_scheduled = false
+          self:_sync_query_progress()
+        end)
+      end
+    end
+  end)
   self.option_panel = FHOptionPanel(self, self.adapter.flags)
   self.log_options = {
     single_file = vim.tbl_extend(
@@ -110,6 +152,37 @@ function FileHistoryPanel:init(opt)
   })
 end
 
+---@param status? "success"|"failed"|"cancel"
+---@param message? string
+function FileHistoryPanel:_finish_query_progress(status, message)
+  if self._progress_id then
+    progress_overlay.finish(self._progress_id, status, message)
+    self._progress_id = nil
+  end
+end
+
+function FileHistoryPanel:_sync_query_progress()
+  local state = self.store.query
+  if state.status == QueryStatus.STREAMING then
+    local message = ("Loading history… %d commits"):format(state.received)
+    if self._progress_id then
+      progress_overlay.update(self._progress_id, message)
+    else
+      self._progress_id = progress_overlay.show(message)
+    end
+  else
+    local status = state.status == QueryStatus.ERROR and "failed"
+      or state.status == QueryStatus.CANCELLED and "cancel"
+      or "success"
+    self:_finish_query_progress(status, state.message)
+  end
+end
+
+---@return boolean
+function FileHistoryPanel:cancel_query()
+  return self.store:cancel_query("Cancelled by user")
+end
+
 ---@override
 function FileHistoryPanel:open()
   FileHistoryPanel.super_class.open(self)
@@ -126,6 +199,12 @@ end
 ---@param self FileHistoryPanel
 FileHistoryPanel.destroy = async.sync_void(function(self)
   self.shutdown:send()
+  self.store:cancel_query("File history panel closed")
+  self:_finish_query_progress()
+  if self._store_unsubscribe then
+    self._store_unsubscribe()
+    self._store_unsubscribe = nil
+  end
 
   await(self.work_pool)
   await(async.scheduler())
@@ -159,9 +238,33 @@ function FileHistoryPanel:setup_buffer()
   end
 end
 
+---@param from integer
+function FileHistoryPanel:_append_entry_components(from)
+  local target = self.components.log.entries
+  for i = from, #self.entries do
+    local entry = self.entries[i]
+    local struct = target.comp:create_component({
+      name = "entry",
+      context = entry,
+      { name = "commit" },
+      { name = "files" },
+    }) --[[@as CompStruct ]]
+    target[#target + 1] = struct
+    target.entry = struct
+  end
+  self._component_entry_count = #self.entries
+end
+
 function FileHistoryPanel:update_components()
   if not self.render_data then
     return
+  end
+
+  if self.components and not self._components_dirty then
+    if self._component_entry_count <= #self.entries then
+      self:_append_entry_components(self._component_entry_count + 1)
+      return
+    end
   end
 
   self.render_data:destroy()
@@ -169,27 +272,18 @@ function FileHistoryPanel:update_components()
     renderer.destroy_comp_struct(self.components)
   end
 
-  local entry_schema = { name = "entries" }
-  for i, entry in ipairs(utils.vec_slice(self.entries)) do
-    if self.updating and i > 128 then
-      break
-    end
-    table.insert(entry_schema, {
-      name = "entry",
-      context = entry,
-      { name = "commit" },
-      { name = "files" },
-    })
-  end
-
   self.components = self.render_data:create_component({
     { name = "header" },
     {
       name = "log",
       { name = "title" },
-      entry_schema,
+      { name = "entries" },
     },
   }) --[[@as CompStruct ]]
+
+  self._component_entry_count = 0
+  self._components_dirty = false
+  self:_append_entry_components(1)
 
   self.constrain_cursor = renderer.create_cursor_constraint({ self.components.log.entries.comp })
 end
@@ -238,7 +332,7 @@ end
 ---@param prev_state FileHistoryPanel.StateSnapshot
 ---@return FileEntry?
 function FileHistoryPanel:_restore_state(prev_state)
-  if self.parent.pin_local then
+  if pin_local(self.parent) then
     return
   end
 
@@ -294,7 +388,9 @@ end
 ---@param callback function
 FileHistoryPanel.update_entries = async.wrap(function(self, callback)
   perf_update:reset()
+  self.store:cancel_query("Superseded by refresh")
   local checkout = self.work_pool:check_in()
+  local token, generation = self.store:begin_query()
 
   -- Snapshot fold/cursor state before the rebuild so a refresh that doesn't
   -- change the history (`R`, `FugitiveChanged`) keeps the user's expanded
@@ -307,20 +403,22 @@ FileHistoryPanel.update_entries = async.wrap(function(self, callback)
 
   panel_renderer.clear_cache(self)
   self.cur_item = {}
-  self.entries = {}
+  self.store:reset_entries()
+  self.entries = self.store.entries
   self.updating = true
+  self._components_dirty = true
 
   local layout_opt = {
     default_layout = self.parent:get_default_layout(),
-    pin_local = self.parent.pin_local,
-    pinned_path = self.parent.pinned_path,
+    pin_local = pin_local(self.parent),
+    pinned_path = pinned_path(self.parent),
     -- Closure into the view's pin_local cache: adapters call this when
     -- constructing a pinned-mode entry's b-side, so every entry across the
     -- whole history shares the same `vcs.File` instance for a given path
     -- (and therefore the same Neovim buffer state). The view owns the
     -- cache's lifetime; adapters and entries treat the returned files as
-    -- borrowed (see `Diff2*Pinned.shared_symbols`).
-    pinned_b_file_for = self.parent.pin_local and function(path)
+    -- borrowed (the FileEntry marks the b symbol shared on its layout instance).
+    pinned_b_file_for = pin_local(self.parent) and function(path)
       return self.parent:get_pinned_b_file(path)
     end or nil,
   }
@@ -334,7 +432,7 @@ FileHistoryPanel.update_entries = async.wrap(function(self, callback)
   -- `git diff HEAD --` pick up every dirty file in the repo. Use the
   -- adapter's `history_scope` to recover the scoped path and restrict the
   -- synth to it.
-  if self.parent.pin_local then
+  if pin_local(self.parent) then
     local raw_path_args = self.adapter.ctx.path_args or {}
     -- `self.log_options` is the `{ single_file, multi_file }` wrapper, but
     -- `history_scope` expects a flat `LogOptions` (it reads `.L` for the
@@ -355,7 +453,7 @@ FileHistoryPanel.update_entries = async.wrap(function(self, callback)
     })
 
     if synth then
-      self.entries[#self.entries + 1] = synth
+      self.store:append(synth, generation)
       self.single_file = synth.single_file
     end
   end
@@ -364,6 +462,9 @@ FileHistoryPanel.update_entries = async.wrap(function(self, callback)
     log_opt = self.log_options,
     layout_opt = layout_opt,
   })
+  token:on_cancel(function()
+    pcall(stream.close, stream, token)
+  end)
 
   self:sync()
 
@@ -391,7 +492,7 @@ FileHistoryPanel.update_entries = async.wrap(function(self, callback)
   local ret = {}
 
   for _, item in stream:iter() do
-    if self.shutdown:check() then
+    if self.shutdown:check() or token:is_cancelled() then
       stream:close(self.shutdown:new_consumer())
       ret = { nil, JobStatus.KILLED }
       break
@@ -400,11 +501,17 @@ FileHistoryPanel.update_entries = async.wrap(function(self, callback)
     ---@type JobStatus, LogEntry?, string?
     local status, entry, msg = unpack(item, 1, 3)
 
-    if status == JobStatus.ERROR then
+    if status == JobStatus.KILLED then
+      self.store:cancel_query(msg or "History query cancelled")
+      ret = { nil, JobStatus.KILLED, msg }
+      break
+    elseif status >= JobStatus.ERROR then
+      self.store:fail(generation, msg or "History query failed")
       utils.err(fmt("Updating file history failed! Error message: %s", msg), true)
       ret = { nil, JobStatus.ERROR, msg }
       break
     elseif status == JobStatus.SUCCESS then
+      self.store:complete(generation)
       ret = { self.entries, status }
       perf_update:time()
       logger:fmt_info(
@@ -415,7 +522,10 @@ FileHistoryPanel.update_entries = async.wrap(function(self, callback)
     elseif status == JobStatus.PROGRESS then
       ---@cast entry -?
       local was_empty = #self.entries == 0
-      self.entries[#self.entries + 1] = entry
+      if not self.store:append(entry, generation) then
+        ret = { nil, JobStatus.KILLED }
+        break
+      end
 
       if was_empty then
         self.single_file = self.entries[1].single_file
@@ -429,6 +539,10 @@ FileHistoryPanel.update_entries = async.wrap(function(self, callback)
 
   await(async.scheduler())
   self.updating = false
+
+  if token:is_cancelled() and self.store:is_current(generation) then
+    ret = { nil, JobStatus.KILLED }
+  end
 
   if not self.shutdown:check() then
     -- Restore the pre-refresh folds and focused file. `set_file` loads the
@@ -801,11 +915,49 @@ function FileHistoryPanel:get_autosize_components()
   }
 end
 
+local toolbar_controls = {
+  { "view.action_palette", "Actions" },
+  { "history.filter", "Filters" },
+  { "history.cancel_query", "Cancel" },
+  { "file.open_commit_log", "Details" },
+  { "file.copy_hash", "Copy hash" },
+  { "diff.diff_against_head", "Diff HEAD" },
+  { "file.restore_entry", "Restore" },
+}
+
+---@return diffview.Component
+function FileHistoryPanel:toolbar_component()
+  local children = {}
+  for _, control in ipairs(toolbar_controls) do
+    local id, label = control[1], control[2]
+    local available, reason = registry.availability(id, self.parent)
+    children[#children + 1] = component.new({
+      identity = "history-toolbar-" .. id,
+      text = "[" .. label .. "]",
+      hl = "DiffviewFilePanelTitle",
+      action = id,
+      disabled = not available,
+      tooltip = available and assert(registry.get(id)).desc or reason,
+    })
+  end
+  return component.new({ identity = "history-toolbar", children = children })
+end
+
 function FileHistoryPanel:render()
   perf_render:reset()
   panel_renderer.file_history_panel(self)
   perf_render:time()
   logger:lvl(10):debug(perf_render)
+end
+
+function FileHistoryPanel:redraw()
+  FileHistoryPanel.super_class.redraw(self)
+  local winbar = component_renderer.winbar(self:toolbar_component(), self)
+  for _, winid in ipairs(self:cursor_winids()) do
+    if api.nvim_win_is_valid(winid) then
+      vim.wo[winid].winbar = winbar
+    end
+  end
 end
 
 ---@return LogOptions

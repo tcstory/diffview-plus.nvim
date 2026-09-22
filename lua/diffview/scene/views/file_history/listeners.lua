@@ -351,16 +351,20 @@ return function(view)
     options = function()
       view.panel.option_panel:focus()
     end,
+    filter_history = function()
+      view.panel.option_panel:focus()
+    end,
+    cancel_history_query = function()
+      view.panel:cancel_query()
+    end,
     copy_hash = function()
-      if view.panel:is_focused() then
-        local item = view.panel:get_item_at_cursor()
-        if item and item.commit and item.commit.hash then
-          local reg = vim.v.register
-          vim.fn.setreg(reg, item.commit.hash)
-          local reg_desc = (reg == '"' or reg == "") and "the default register"
-            or string.format("register '%s'", reg)
-          utils.info(string.format("Copied '%s' to %s.", item.commit.hash, reg_desc))
-        end
+      local item = view.panel:get_item_at_cursor() or view.panel.cur_item[1]
+      if item and item.commit and item.commit.hash then
+        local reg = vim.v.register
+        vim.fn.setreg(reg, item.commit.hash)
+        local reg_desc = (reg == '"' or reg == "") and "the default register"
+          or string.format("register '%s'", reg)
+        utils.info(string.format("Copied '%s' to %s.", item.commit.hash, reg_desc))
       end
     end,
     open_commit_in_browser = function()

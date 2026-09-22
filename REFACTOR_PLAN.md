@@ -500,11 +500,11 @@ require("diffview").setup({
 
 ### Phase 8：FileHistory 迁移
 
-- [ ] history query 支持 progress/cancel/streaming state。
-- [ ] option panel 合并为可点击 Filter UI。
-- [ ] commit details、copy hash、diff against HEAD、restore 进入 context action。
-- [ ] pin-local 变成 ViewState 模式，不再依赖特殊 layout 子类扩散。
-- [ ] 大历史增量 append，不进行全量 component rebuild。
+- [x] history query 支持 progress/cancel/streaming state。
+- [x] option panel 合并为可点击 Filter UI。
+- [x] commit details、copy hash、diff against HEAD、restore 进入 context action。
+- [x] pin-local 变成 ViewState 模式，不再依赖特殊 layout 子类扩散。
+- [x] 大历史增量 append，不进行全量 component rebuild。
 
 验收：history 可取消；筛选不依赖快捷键；大量 commit 滚动和刷新达到基准。
 

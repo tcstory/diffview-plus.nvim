@@ -13,6 +13,7 @@ local LogEntry = lazy.access("diffview.vcs.log_entry", "LogEntry") ---@type LogE
 local File = lazy.access("diffview.vcs.file", "File") ---@type vcs.File|LazyModule
 local RevType = lazy.access("diffview.vcs.rev", "RevType") ---@type RevType|LazyModule
 local StandardView = lazy.access("diffview.scene.views.standard.standard_view", "StandardView") ---@type StandardView|LazyModule
+local FileHistoryStore = require("diffview.scene.views.file_history.store").FileHistoryStore
 local config = lazy.require("diffview.config") ---@module "diffview.config"
 local utils = lazy.require("diffview.utils") ---@module "diffview.utils"
 
@@ -26,6 +27,7 @@ local M = {}
 ---@field adapter VCSAdapter
 ---@field panel FileHistoryPanel
 ---@field commit_log_panel CommitLogPanel
+---@field store FileHistoryStore
 ---@field valid boolean
 ---@field pin_local? boolean # When true, the b-window stays bound to the working-tree LOCAL buffer across log navigation; resolved from `--pin-local` or `view.file_history.pin_local`.
 ---@field pinned_path? string # Working-tree path the b-window is pinned to. Seeded from `path_args[1]` for single-file pinning; the cursor follower updates it when the user highlights a file row in multi-file mode.
@@ -33,19 +35,40 @@ local M = {}
 ---@field _pinned_b_files table<string, vcs.File> # View-owned cache of working-tree `vcs.File` instances keyed by path. Each pinned-mode b-window across the entire history reuses the entry for its path, so identity is stable across panel refreshes; entry destruction skips these files (see `Diff2*Pinned.shared_symbols`) and the view destroys them in `close()`.
 local FileHistoryView = oop.create_class("FileHistoryView", StandardView.__get())
 
+---@return boolean
+function FileHistoryView:is_pin_local()
+  return self.store and self.store.view.pin_local or self.pin_local == true
+end
+
+---@return string?
+function FileHistoryView:get_pinned_path()
+  return self.store and self.store.view.pinned_path or self.pinned_path
+end
+
+---@param path string?
+function FileHistoryView:set_pinned_path(path)
+  if self.store then
+    self.store.view.pinned_path = path
+  end
+  self.pinned_path = path
+end
+
 function FileHistoryView:init(opt)
   self.valid = false
   self.adapter = opt.adapter
-  self.pin_local = opt.pin_local
-  self.pinned_path = opt.pinned_path
+  self.store = FileHistoryStore.new({ pin_local = opt.pin_local, pinned_path = opt.pinned_path })
+  -- Compatibility projections. Production reads and writes the ViewState in
+  -- `store.view`; these aliases remain until the Phase 10 compatibility cut.
+  self.pin_local = self.store.view.pin_local
+  self.pinned_path = self.store.view.pinned_path
   self.no_panel = opt.no_panel
-  self._pinned_b_files = {}
+  self._pinned_b_files = self.store.view.pinned_files
 
   self:super({
     panel = FileHistoryPanel({
       parent = self,
       adapter = self.adapter,
-      entries = {},
+      store = self.store,
       log_options = opt.log_options,
     }),
   })
@@ -83,6 +106,7 @@ end
 function FileHistoryView:close()
   if not self.closing:check() then
     self.closing:send()
+    self.store:cancel_query("File history view closed")
 
     -- Cancel any pending debounced fire so a `CursorMoved` that already
     -- queued a `vim.schedule` callback can't run after teardown begins.
@@ -156,6 +180,9 @@ function FileHistoryView:_destroy_pinned_b_files()
     file:destroy(false)
   end
   self._pinned_b_files = {}
+  if self.store then
+    self.store.view.pinned_files = self._pinned_b_files
+  end
 end
 
 ---@override
@@ -233,8 +260,8 @@ FileHistoryView.set_file = async.void(function(self, file, focus, keep_cursor)
     -- mode where `pinned_path` is the rename anchor (the working-tree
     -- name) and may legitimately differ from the entry's commit-side
     -- name; the adapter resolves the rename in that mode.
-    if self.pin_local and not self.panel.single_file then
-      self.pinned_path = file.path
+    if self:is_pin_local() and not self.panel.single_file then
+      self:set_pinned_path(file.path)
     end
 
     if not keep_cursor and cur_entry and entry ~= cur_entry then
@@ -291,7 +318,7 @@ end
 -- pinned via Diff2HorPinned/Diff2VerPinned, so only the commit-side window
 -- actually rebuilds.
 function FileHistoryView:_install_pinned_cursor_follower()
-  if not self.pin_local then
+  if not self:is_pin_local() then
     return
   end
 
@@ -345,7 +372,9 @@ end
 ---@param path string Working-tree path the b-side should pin to.
 ---@return vcs.File
 function FileHistoryView:get_pinned_b_file(path)
-  local cached = self._pinned_b_files[path]
+  local pinned_files = self.store and self.store.view.pinned_files or self._pinned_b_files or {}
+  self._pinned_b_files = pinned_files
+  local cached = pinned_files[path]
   if cached then
     return cached
   end
@@ -357,7 +386,10 @@ function FileHistoryView:get_pinned_b_file(path)
     rev = self.adapter.Rev(RevType.__get().LOCAL),
   }) --[[@as vcs.File ]]
 
-  self._pinned_b_files[path] = file
+  pinned_files[path] = file
+  if self.store then
+    self.store.view.pinned_files = pinned_files
+  end
   return file
 end
 
@@ -370,7 +402,7 @@ end
 ---@param entry LogEntry
 ---@return FileEntry?
 function FileHistoryView:_resolve_pinned_target(entry)
-  local pinned_path = self.pinned_path
+  local pinned_path = self:get_pinned_path()
 
   -- Bootstrap: with no pinned path yet, fall back to the entry's first file
   -- and let the next file-row interaction lock in a `pinned_path`.
@@ -464,7 +496,7 @@ end
 ---@param entry LogEntry
 ---@return FileEntry?
 function FileHistoryView:pick_entry_target(entry)
-  if self.pin_local then
+  if self:is_pin_local() then
     return self:_resolve_pinned_target(entry)
   end
   return entry.files[1]
@@ -509,12 +541,8 @@ function FileHistoryView:should_show_panel()
   return self:resolve_panel_visibility(config.get_config().file_history_panel.show)
 end
 
--- Map a non-pinned layout name to its pinned counterpart. Pinned variants
--- share window orientation with their unpinned siblings; we re-route the
--- layout class so the b-window keeps its file across entry swaps via
--- `shared_symbols = { "b" }`. Diff1/Diff1Inline have pinned variants too
--- (their b-side is also bound to the view-owned working-tree file in
--- pin_local mode); names without a pinned sibling fall through unchanged.
+-- Compatibility name map for configurations/integrations that still hand us
+-- a pre-Phase-8 specialized pinned class. Production uses the ordinary name.
 local pinned_variant = {
   diff1_plain = "diff1_plain_pinned",
   diff1_inline = "diff1_inline_pinned",
@@ -522,22 +550,7 @@ local pinned_variant = {
   diff2_vertical = "diff2_vertical_pinned",
 }
 
--- Inverse of `pinned_variant`. Pinned classes only make sense in
--- `pin_local` mode: they all declare `shared_symbols = { "b" }` and expect
--- the FileHistoryView to own the b-side `vcs.File` via its pin_local cache,
--- so outside `pin_local` there's no shared owner and the b-side would
--- never be torn down. The Diff2 pinned variants are additionally unsafe
--- there because they override `should_null` with parent-vs-commit semantics
--- that assume `revs.a = COMMIT` (only injected under `pin_local`); applied
--- to a parent-vs-commit history they mis-classify status "A"/"?" and the
--- adapter then fails to `show <rev>:<missing>` (the Diff1 pinned variants
--- inherit `Diff1.should_null` unchanged, so they don't have that specific
--- bug, but the shared-b ownership mismatch still applies). The user-config
--- path is already gated by `config`'s `standard_layouts` validation
--- (pinned names aren't in the schema's allow-list), but we still fold
--- pinned → unpinned here as belt-and-suspenders for any other caller
--- (tests, future code) that reaches `get_default_layout` with a pinned
--- name and `pin_local` off.
+-- Normalize those legacy names at every layout-selection boundary.
 local unpinned_variant = {}
 for unpinned, pinned in pairs(pinned_variant) do
   unpinned_variant[pinned] = unpinned
@@ -552,32 +565,15 @@ function FileHistoryView:get_default_layout()
     name = FileHistoryView.get_default_diff2().name
   end
 
-  local resolved
-  if self.pin_local then
-    -- Upgrade standard layout names to their pinned siblings so the
-    -- shared-b mechanism engages: pinned variants declare
-    -- `shared_symbols = { "b" }`, which keeps `FileEntry:destroy` from
-    -- tearing down the view-owned working-tree file on every refresh.
-    -- All standard layouts (`diff1_*`, `diff2_*`) have pinned siblings,
-    -- so the `pinned_variant` lookup normally hits. If a non-standard
-    -- name ever reaches here (e.g. via a future non-config caller that
-    -- bypasses the `standard_layouts` allow-list), fall back to the
-    -- default pinned Diff2 -- matching `resolve_pinned_layout` -- so the
-    -- shared-b contract still holds.
-    resolved = pinned_variant[name] or pinned_variant[FileHistoryView.get_default_diff2().name]
-  else
-    resolved = unpinned_variant[name] or name
-  end
+  -- Pin-local is a ViewState mode. Borrowed b-side ownership and null
+  -- semantics are attached to each FileEntry/Layout instance, so layout
+  -- selection no longer spreads the mode across dedicated subclasses.
+  local resolved = unpinned_variant[name] or name
 
   return config.name_to_layout(resolved --[[@as string ]])
 end
 
----Inverse of `resolve_pinned_layout`: map a pinned class to its unpinned
----sibling, returning the input unchanged for any other class. Used by
----`cycle_layout` to find the current layout's position in the unpinned
----cycle list (the cycle list contains `Diff2Hor`/`Diff2Ver`, but in
----pin_local mode the active class is `Diff2*Pinned`, so a direct
----`vec_indexof` would always miss and stick the user on the first layout).
+---Map a legacy pinned class to its ordinary sibling.
 ---@param layout_class Layout (class)
 ---@return Layout (class)
 function FileHistoryView:unpinned_layout(layout_class)
@@ -588,41 +584,19 @@ function FileHistoryView:unpinned_layout(layout_class)
   return config.name_to_layout(sibling --[[@as string ]])
 end
 
----Map an arbitrary layout class to the right one for this view's pin_local
----state. Used by `cycle_layout` / `set_layout` so neither action drops a
----pin_local FileHistoryView into an unpinned variant (which would cause
----`FileEntry:destroy` to tear down the view-owned working-tree file once
----per entry, and would untie the b-window from its shared LOCAL buffer).
----When `pin_local` is off, returns the input unchanged. When on:
----  - already a pinned variant: returns it unchanged (preserves the user's
----    chosen orientation).
----  - has a pinned sibling (e.g. `diff2_horizontal`, `diff1_inline`):
----    returns the pinned sibling.
----  - no pinned variant (e.g. `diff3_*`/`diff4_*` reaching us via a
----    user-supplied `view.cycle_layouts.default` entry or a direct
----    `actions.set_layout` call): falls back to the default Diff2's pinned
----    form so the shared-b contract still holds.
+---Normalize legacy pinned classes. In pin-local mode, merge-only layouts are
+---rejected in favour of a standard Diff2; ownership remains ViewState-driven.
 ---@param layout_class Layout (class)
 ---@return Layout (class)
 function FileHistoryView:resolve_pinned_layout(layout_class)
-  if not self.pin_local then
-    return layout_class
-  end
-
   local name = layout_class.name
-
   if unpinned_variant[name] then
+    return config.name_to_layout(unpinned_variant[name] --[[@as string ]])
+  end
+  if not self:is_pin_local() or pinned_variant[name] then
     return layout_class
   end
-
-  local sibling = pinned_variant[name]
-  if sibling then
-    return config.name_to_layout(sibling --[[@as string ]])
-  end
-
-  return config.name_to_layout(
-    pinned_variant[FileHistoryView.get_default_diff2().name] --[[@as string ]]
-  )
+  return FileHistoryView.get_default_diff2()
 end
 
 M.FileHistoryView = FileHistoryView

@@ -695,9 +695,8 @@ describe("diffview.actions.cycle_layout pin_local cycling", function()
     -- Reproduces the reported bug: with cycle `{ Ver, Hor, Diff1Inline }`
     -- and `pin_local`, cycling used to skip Diff1Inline (resolved to the
     -- default Diff2's pinned form, so the user got Ver -> Hor -> stuck on
-    -- Hor). `pinned_variant` now covers Diff1Inline, so cycling lands on
-    -- `Diff1InlinePinned` (b-side declared shared, view-owned working-tree
-    -- File survives entry teardown) and the cycle visits all three.
+    -- Hor). Pin-local ownership now lives on each layout instance, so the
+    -- ordinary Diff1Inline class remains in the cycle and all three are visited.
     local old_warn = utils.warn
     utils.warn = function() end
     config.setup({
@@ -710,7 +709,7 @@ describe("diffview.actions.cycle_layout pin_local cycling", function()
     })
     utils.warn = old_warn
 
-    local file = mock_file_entry(Diff2VerPinned)
+    local file = mock_file_entry(Diff2Ver)
     local view = mock_file_history_view({ file }, file, true)
 
     stub(lib, "get_current_view", function()
@@ -722,20 +721,20 @@ describe("diffview.actions.cycle_layout pin_local cycling", function()
 
     actions.cycle_layout()
     eq(1, #converted_layouts)
-    eq(Diff2HorPinned, converted_layouts[1])
+    eq(Diff2Hor, converted_layouts[1])
 
     actions.cycle_layout()
     eq(2, #converted_layouts)
-    eq(Diff1InlinePinned, converted_layouts[2])
+    eq(Diff1Inline, converted_layouts[2])
 
     actions.cycle_layout()
     eq(3, #converted_layouts)
-    eq(Diff2VerPinned, converted_layouts[3])
+    eq(Diff2Ver, converted_layouts[3])
   end)
 
   it("cycles through Diff1-only cycles in pin_local mode", function()
-    -- The cycle list contains only Diff1 variants; both have pinned
-    -- siblings, so cycling stays in the pin_local-safe class space.
+    -- The cycle list contains only Diff1 variants; pin-local instance state
+    -- keeps both safe without substituting specialized classes.
     local old_warn = utils.warn
     utils.warn = function() end
     config.setup({
@@ -747,7 +746,7 @@ describe("diffview.actions.cycle_layout pin_local cycling", function()
     })
     utils.warn = old_warn
 
-    local file = mock_file_entry(Diff1InlinePinned)
+    local file = mock_file_entry(Diff1Inline)
     local view = mock_file_history_view({ file }, file, true)
 
     stub(lib, "get_current_view", function()
@@ -759,14 +758,13 @@ describe("diffview.actions.cycle_layout pin_local cycling", function()
 
     actions.cycle_layout()
     eq(1, #converted_layouts)
-    eq(Diff1Pinned, converted_layouts[1])
+    eq(Diff1, converted_layouts[1])
   end)
 
   it("reaches the same set of layouts whether pin_local is on or off", function()
     -- Symmetry check: with `cycle_layouts.default = { Hor, Ver, Diff1Inline }`,
     -- three presses should land on the same sequence of layout NAMES
-    -- regardless of `pin_local` (the pin_local entries differ only by
-    -- carrying the `*_pinned` class for the same orientation).
+    -- regardless of `pin_local`.
     local old_warn = utils.warn
     utils.warn = function() end
     config.setup({
@@ -805,7 +803,7 @@ describe("diffview.actions.cycle_layout pin_local cycling", function()
     stubs = {}
     converted_layouts = {}
 
-    local file_on = mock_file_entry(Diff2HorPinned)
+    local file_on = mock_file_entry(Diff2Hor)
     local view_on = mock_file_history_view({ file_on }, file_on, true)
     stub(lib, "get_current_view", function()
       return view_on
@@ -822,7 +820,7 @@ describe("diffview.actions.cycle_layout pin_local cycling", function()
       converted_layouts[2].name,
       converted_layouts[3].name,
     }
-    -- Same orientations, with `*_pinned` variants throughout.
-    eq({ "diff2_vertical_pinned", "diff1_inline_pinned", "diff2_horizontal_pinned" }, on_names)
+    -- Pin-local is view state, so it traverses the identical layout classes.
+    eq({ "diff2_vertical", "diff1_inline", "diff2_horizontal" }, on_names)
   end)
 end)

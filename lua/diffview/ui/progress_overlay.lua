@@ -5,6 +5,19 @@ local component = require("diffview.ui.component")
 local M = {}
 local next_id = 1
 local active = {}
+local echo_ids = {}
+
+local function echo(message, opts)
+  return vim.api.nvim_echo(
+    { { message, "Comment" } },
+    false,
+    vim.tbl_extend("force", {
+      kind = "progress",
+      source = "diffview",
+      title = "Diffview",
+    }, opts)
+  )
+end
 
 ---@param message string
 ---@return integer
@@ -12,7 +25,7 @@ function M.show(message)
   local id = next_id
   next_id = next_id + 1
   active[id] = component.new({ identity = "progress-" .. id, text = message })
-  vim.api.nvim_echo({ { message, "Comment" } }, false, { kind = "progress" })
+  echo_ids[id] = echo(message, { status = "running" })
   return id
 end
 
@@ -23,16 +36,23 @@ function M.update(id, message)
     return false
   end
   active[id] = component.new({ identity = "progress-" .. id, text = message })
-  vim.api.nvim_echo({ { message, "Comment" } }, false, { kind = "progress" })
+  echo(message, { id = echo_ids[id], status = "running" })
   return true
 end
 
 ---@param id integer
-function M.finish(id)
-  active[id] = nil
-  if not next(active) then
-    vim.api.nvim_echo({}, false, { kind = "progress" })
+---@param status? "success"|"failed"|"cancel"
+---@param message? string
+function M.finish(id, status, message)
+  if echo_ids[id] then
+    echo(message or "Done", {
+      id = echo_ids[id],
+      status = status or "success",
+      percent = (status == nil or status == "success") and 100 or nil,
+    })
   end
+  active[id] = nil
+  echo_ids[id] = nil
 end
 
 ---@param id integer

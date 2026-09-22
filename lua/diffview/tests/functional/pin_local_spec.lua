@@ -2,6 +2,7 @@ local Diff1InlinePinned = require("diffview.scene.layouts.diff_1_inline_pinned")
 local Diff1Pinned = require("diffview.scene.layouts.diff_1_pinned").Diff1Pinned
 local Diff2 = require("diffview.scene.layouts.diff_2").Diff2
 local Diff2Hor = require("diffview.scene.layouts.diff_2_hor").Diff2Hor
+local Diff2Ver = require("diffview.scene.layouts.diff_2_ver").Diff2Ver
 local Diff2HorPinned = require("diffview.scene.layouts.diff_2_hor_pinned").Diff2HorPinned
 local Diff2VerPinned = require("diffview.scene.layouts.diff_2_ver_pinned").Diff2VerPinned
 local FileEntry = require("diffview.scene.file_entry").FileEntry
@@ -77,18 +78,18 @@ describe("FileHistoryView:get_default_layout pinning", function()
     eq("diff2_horizontal", v:get_default_layout().name)
   end)
 
-  it("upgrades diff2_horizontal to Diff2HorPinned when pin_local is true", function()
+  it("keeps diff2_horizontal as a standard layout in pin-local mode", function()
     config.setup({ view = { file_history = { layout = "diff2_horizontal" } } })
     local v = inst(true)
 
-    eq(Diff2HorPinned, v:get_default_layout())
+    eq(Diff2Hor, v:get_default_layout())
   end)
 
-  it("upgrades diff2_vertical to Diff2VerPinned when pin_local is true", function()
+  it("keeps diff2_vertical as a standard layout in pin-local mode", function()
     config.setup({ view = { file_history = { layout = "diff2_vertical" } } })
     local v = inst(true)
 
-    eq(Diff2VerPinned, v:get_default_layout())
+    eq(Diff2Ver, v:get_default_layout())
   end)
 end)
 
@@ -640,10 +641,10 @@ describe("FileHistoryView pinned-local layout selection (sanity)", function()
     return setmetatable({ pin_local = pin_local }, { __index = FileHistoryView })
   end
 
-  it("resolves to pinned variants regardless of single/multi file mode", function()
+  it("resolves pin-local mode without a specialized layout class", function()
     config.setup({ view = { file_history = { layout = "diff2_horizontal" } } })
 
-    eq(Diff2HorPinned, inst(true):get_default_layout())
+    eq(Diff2Hor, inst(true):get_default_layout())
   end)
 
   it("does not upgrade when pin_local is unset", function()
@@ -677,13 +678,9 @@ describe("FileHistoryView pinned-local layout selection (sanity)", function()
     eq("diff2_vertical", stub_named("diff2_vertical_pinned", nil):get_default_layout().name)
   end)
 
-  -- pin_local + a Diff1 layout (e.g. `diff1_inline`): upgrade to the
-  -- pinned Diff1 sibling so the shared-b mechanism still engages. The
-  -- pinned variants declare `shared_symbols = { "b" }`, so
-  -- `FileEntry:destroy` leaves the view-owned working-tree file alone.
-  it("upgrades a Diff1 layout to its pinned variant when pin_local is on", function()
-    eq("diff1_inline_pinned", stub_named("diff1_inline", true):get_default_layout().name)
-    eq("diff1_plain_pinned", stub_named("diff1_plain", true):get_default_layout().name)
+  it("keeps Diff1 layout selection independent from pin-local mode", function()
+    eq("diff1_inline", stub_named("diff1_inline", true):get_default_layout().name)
+    eq("diff1_plain", stub_named("diff1_plain", true):get_default_layout().name)
   end)
 
   -- Defensive path mirroring the Diff2 downgrade: if a pinned Diff1 name
@@ -723,28 +720,28 @@ describe("FileHistoryView:resolve_pinned_layout", function()
     eq(Diff1Inline, inst(false):resolve_pinned_layout(Diff1Inline))
   end)
 
-  it("upgrades unpinned Diff2 to its pinned sibling", function()
-    eq(Diff2HorPinned, inst(true):resolve_pinned_layout(Diff2Hor))
-    eq(Diff2VerPinned, inst(true):resolve_pinned_layout(Diff2Ver))
+  it("keeps standard Diff2 classes in pin-local mode", function()
+    eq(Diff2Hor, inst(true):resolve_pinned_layout(Diff2Hor))
+    eq(Diff2Ver, inst(true):resolve_pinned_layout(Diff2Ver))
   end)
 
-  it("preserves a pinned variant unchanged (idempotent)", function()
-    eq(Diff2HorPinned, inst(true):resolve_pinned_layout(Diff2HorPinned))
-    eq(Diff2VerPinned, inst(true):resolve_pinned_layout(Diff2VerPinned))
+  it("normalizes legacy pinned Diff2 classes", function()
+    eq(Diff2Hor, inst(true):resolve_pinned_layout(Diff2HorPinned))
+    eq(Diff2Ver, inst(true):resolve_pinned_layout(Diff2VerPinned))
   end)
 
   -- Diff1 variants gain pinned siblings too so `cycle_layout` /
   -- `set_layout` can route to them without `FileEntry:destroy` tearing
   -- down the view-owned working-tree file. `Diff1*Pinned` declare
   -- `shared_symbols = { "b" }`, mirroring `Diff2*Pinned`.
-  it("upgrades unpinned Diff1 to its pinned sibling", function()
-    eq(Diff1Pinned, inst(true):resolve_pinned_layout(Diff1))
-    eq(Diff1InlinePinned, inst(true):resolve_pinned_layout(Diff1Inline))
+  it("keeps standard Diff1 classes in pin-local mode", function()
+    eq(Diff1, inst(true):resolve_pinned_layout(Diff1))
+    eq(Diff1Inline, inst(true):resolve_pinned_layout(Diff1Inline))
   end)
 
-  it("preserves a pinned Diff1 variant unchanged (idempotent)", function()
-    eq(Diff1Pinned, inst(true):resolve_pinned_layout(Diff1Pinned))
-    eq(Diff1InlinePinned, inst(true):resolve_pinned_layout(Diff1InlinePinned))
+  it("normalizes legacy pinned Diff1 classes", function()
+    eq(Diff1, inst(true):resolve_pinned_layout(Diff1Pinned))
+    eq(Diff1Inline, inst(true):resolve_pinned_layout(Diff1InlinePinned))
   end)
 
   -- `actions.set_layout("diff3_horizontal")` and user-supplied
@@ -756,16 +753,16 @@ describe("FileHistoryView:resolve_pinned_layout", function()
   -- Diff2's pinned form preserves the shared-b contract. The exact
   -- orientation depends on `prefer_horizontal()`, so we only assert
   -- that the result is one of the pinned Diff2 variants.
-  it("falls back to a pinned Diff2 for non-pinnable layouts in pin_local", function()
-    local pinned_diff2 = {
-      [Diff2HorPinned] = true,
-      [Diff2VerPinned] = true,
+  it("falls back to a standard Diff2 for non-history layouts in pin_local", function()
+    local standard_diff2 = {
+      [Diff2Hor] = true,
+      [Diff2Ver] = true,
     }
     for _, cls in ipairs({ Diff3Hor, Diff3Ver, Diff3Mixed, Diff4Mixed }) do
       local resolved = inst(true):resolve_pinned_layout(cls)
       assert.is_true(
-        pinned_diff2[resolved],
-        "expected pinned Diff2, got " .. tostring(resolved and resolved.name)
+        standard_diff2[resolved],
+        "expected standard Diff2, got " .. tostring(resolved and resolved.name)
       )
     end
   end)

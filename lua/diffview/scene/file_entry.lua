@@ -29,6 +29,19 @@ local function try_should_null(layout, rev, status, symbol)
   return ok and res or false
 end
 
+---@param layout Layout (class)
+---@param rev Rev
+---@param status string
+---@param symbol string
+---@param pin_local boolean
+---@return boolean
+local function should_null(layout, rev, status, symbol, pin_local)
+  if pin_local and symbol == "a" and rev.type == RevType.COMMIT and not rev.pin_local_synthetic then
+    return status == "D"
+  end
+  return try_should_null(layout, rev, status, symbol)
+end
+
 ---@class GitStats
 ---@field additions? integer
 ---@field deletions? integer
@@ -58,6 +71,7 @@ end
 ---@field merge_ctx vcs.MergeContext?
 ---@field active boolean
 ---@field opened boolean
+---@field pin_local boolean
 ---@field _extra_owned vcs.File[] # Files this entry owns that aren't reachable through `layout:owned_files()` (e.g. one-off nulled fallbacks built for a window whose symbol is in `shared_symbols`).
 local FileEntry = oop.create_class("FileEntry")
 
@@ -74,6 +88,7 @@ local FileEntry = oop.create_class("FileEntry")
 ---@field commit? Commit
 ---@field merge_ctx? vcs.MergeContext
 ---@field _extra_owned? vcs.File[]
+---@field pin_local? boolean
 
 ---FileEntry constructor
 ---@param opt FileEntry.init.Opt
@@ -95,6 +110,7 @@ function FileEntry:init(opt)
   self.merge_ctx = opt.merge_ctx
   self.active = false
   self.opened = false
+  self.pin_local = opt.pin_local == true
   -- Files this FileEntry owns that aren't reachable through `layout:owned_files()`
   -- (e.g. one-off nulled fallbacks for shared-symbol windows when the
   -- shared instance can't be used). Populated by `with_layout`.
@@ -179,7 +195,7 @@ function FileEntry:convert_layout(target_layout)
       -- buffer instead of asking the adapter for their actual revision.
       get_data = rev and rev.type == RevType.CUSTOM and get_data or nil,
       rev = rev,
-      nulled = try_should_null(target_layout, rev, self.status, symbol),
+      nulled = should_null(target_layout, rev, self.status, symbol, self.pin_local),
     }) --[[@as vcs.File ]]
   end
 
@@ -189,6 +205,9 @@ function FileEntry:convert_layout(target_layout)
     c = self.layout:get_file_for("c") or create_file(self.revs.c, "c"),
     d = self.layout:get_file_for("d") or create_file(self.revs.d, "d"),
   })
+  if self.pin_local then
+    self.layout.shared_symbols = { "b" }
+  end
   self:update_merge_context()
 end
 
@@ -360,6 +379,7 @@ end
 function FileEntry.with_layout(layout_class, opt)
   local extra_owned = {}
   local effective_class = select_layout_for_status(layout_class, opt)
+  local pin_local = opt.pinned_b_file ~= nil
   local using_raw = effective_class == Diff1Raw.__get()
   -- For status `D` against a LOCAL/STAGE b-side, Diff2 would null the b-pane.
   -- Substitute `revs.a` for the b-rev so the single Diff1Raw window shows
@@ -380,7 +400,7 @@ function FileEntry.with_layout(layout_class, opt)
       -- overlay case (file exists in WT but not in this commit), where
       -- `try_should_null` would also return true but the b-side must
       -- still show the LOCAL file.
-      local null_b = try_should_null(effective_class, rev, opt.status, symbol)
+      local null_b = should_null(effective_class, rev, opt.status, symbol, pin_local)
         and vim.fn.filereadable(opt.pinned_b_file.absolute_path) ~= 1
       if not null_b then
         return opt.pinned_b_file
@@ -411,7 +431,7 @@ function FileEntry.with_layout(layout_class, opt)
     elseif using_raw then
       nulled_flag = try_should_null(Diff2.__get(), rev, opt.status, symbol)
     else
-      nulled_flag = try_should_null(effective_class, rev, opt.status, symbol)
+      nulled_flag = should_null(effective_class, rev, opt.status, symbol, pin_local)
     end
 
     local file = File({
@@ -443,6 +463,17 @@ function FileEntry.with_layout(layout_class, opt)
   end
   local b_file = create_file(b_substituted and opt.revs.a or opt.revs.b, "b")
 
+  local layout = effective_class({
+    a = a_file,
+    b = b_file,
+    c = create_file(opt.revs.c, "c"),
+    d = create_file(opt.revs.d, "d"),
+    b_substituted = b_substituted,
+  })
+  if pin_local then
+    layout.shared_symbols = { "b" }
+  end
+
   return FileEntry({
     adapter = opt.adapter,
     path = opt.path,
@@ -452,14 +483,9 @@ function FileEntry.with_layout(layout_class, opt)
     kind = opt.kind,
     commit = opt.commit,
     revs = opt.revs,
+    pin_local = pin_local,
     _extra_owned = extra_owned,
-    layout = effective_class({
-      a = a_file,
-      b = b_file,
-      c = create_file(opt.revs.c, "c"),
-      d = create_file(opt.revs.d, "d"),
-      b_substituted = b_substituted,
-    }),
+    layout = layout,
   })
 end
 

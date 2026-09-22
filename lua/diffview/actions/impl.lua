@@ -42,6 +42,8 @@ local pl = lazy.access(utils, "path") --[[@as PathLib ]]
 ---@field close_all_folds fun()
 ---@field close_fold fun()
 ---@field copy_hash fun()
+---@field filter_history fun()
+---@field cancel_history_query fun()
 ---@field diff_against_head fun()
 ---@field focus_entry fun()
 ---@field focus_files fun()
@@ -1306,6 +1308,8 @@ local action_names = {
   "close_all_folds",
   "close_fold",
   "copy_hash",
+  "filter_history",
+  "cancel_history_query",
   "diff_against_head",
   "focus_entry",
   "focus_files",

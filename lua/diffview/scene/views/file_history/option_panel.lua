@@ -155,6 +155,12 @@ end
 
 function FHOptionPanel:setup_buffer()
   self:apply_keymaps("option_panel")
+  vim.keymap.set(
+    "n",
+    "<LeftMouse>",
+    require("diffview.ui.router").callback("mouse", self.bufid, "navigation.select_entry"),
+    { silent = true, buffer = self.bufid }
+  )
 
   for _, group in pairs(self.flags) do
     ---@cast group FlagOption[]

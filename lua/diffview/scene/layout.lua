@@ -97,6 +97,7 @@ function Layout:teardown_render() end
 
 function Layout:clone()
   local clone = self.class({ emitter = self.emitter }) --[[@as Layout ]]
+  clone.shared_symbols = utils.vec_slice(self.shared_symbols)
 
   for i, win in ipairs(self.windows) do
     clone.windows[i]:set_id(win.id)
