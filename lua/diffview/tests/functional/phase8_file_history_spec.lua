@@ -60,7 +60,7 @@ describe("Phase 8 file-history migration", function()
   end)
 
   it("exposes filter, cancel, and commit context actions in the toolbar", function()
-    require("diffview.actions")
+    require("diffview.actions.builtins")
     local store = FileHistoryStore.new()
     store:begin_query()
     local panel = setmetatable({

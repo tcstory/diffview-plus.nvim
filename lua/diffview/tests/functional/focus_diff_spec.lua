@@ -112,7 +112,7 @@ end)
 -- focus, so the listener discriminates on `view.options.selected_row`.
 describe("file_open_new listener: --selected-row focus", function()
   local listeners_factory = require("diffview.scene.views.diff.listeners")
-  local actions = require("diffview.actions")
+  local actions = require("diffview.actions.builtins")
 
   local MAIN_WIN_ID = 77
 

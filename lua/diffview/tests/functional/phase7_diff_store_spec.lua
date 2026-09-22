@@ -125,7 +125,7 @@ describe("Phase 7 DiffView state and controls", function()
   end)
 
   it("exposes daily review operations in the file-panel toolbar", function()
-    require("diffview.actions")
+    require("diffview.actions.builtins")
     local adapter = { ctx = { toplevel = "/tmp" } }
     local panel = FilePanel(adapter --[[@as VCSAdapter]], files({}) --[[@as FileDict]], {})
     panel.view = {

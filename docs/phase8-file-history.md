@@ -26,8 +26,8 @@ Pin-local mode and its shared working-tree files now live in
 `FileHistoryStore.view`. Standard Diff1 and Diff2 layout classes receive
 borrowed b-side ownership and pin-local null semantics on their instances.
 Production selection and layout cycling therefore no longer substitute four
-specialized pinned layout subclasses. Their modules remain only for compatibility
-and are recorded for removal in Phase 10.
+specialized pinned layout subclasses. Those compatibility modules were removed
+in Phase 10; old `_pinned` layout names now raise a migration error.
 
 ## Incremental history components
 

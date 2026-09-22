@@ -4,10 +4,10 @@ local Diff2Hor = require("diffview.scene.layouts.diff_2_hor").Diff2Hor
 local FileEntry = require("diffview.scene.file_entry").FileEntry
 local FlagOption = require("diffview.vcs.flag_option").FlagOption
 local GitRev = require("diffview.vcs.adapters.git.rev").GitRev
-local Job = require("diffview.job").Job
+local Job = require("diffview.runtime.process_task").ProcessTask
 local JobStatus = require("diffview.vcs.utils").JobStatus
 local LogEntry = require("diffview.vcs.log_entry").LogEntry
-local MultiJob = require("diffview.multi_job").MultiJob
+local MultiJob = require("diffview.runtime.process_group").ProcessGroup
 local RevType = require("diffview.vcs.rev").RevType
 local VCSAdapter = require("diffview.vcs.adapter").VCSAdapter
 local arg_parser = require("diffview.arg_parser")
@@ -494,7 +494,7 @@ local structure_fh_data = git_parser.structure_fh_data
 
 ---@param state GitAdapter.FHState
 function GitAdapter:stream_fh_data(state)
-  ---@type diffview.Job, AsyncListStream
+  ---@type diffview.ProcessTask, AsyncListStream
   local job, stream
   ---@type string[]?
   local data
@@ -544,7 +544,7 @@ function GitAdapter:stream_fh_data(state)
     end,
   })
 
-  job = Job({
+  job = Job.new({
     command = self:bin(),
     args = utils.vec_join(
       self:args(),
@@ -580,7 +580,7 @@ end
 
 ---@param state GitAdapter.FHState
 function GitAdapter:stream_line_trace_data(state)
-  ---@type diffview.Job, AsyncListStream
+  ---@type diffview.ProcessTask, AsyncListStream
   local job, stream
   ---@type string[]?
   local data
@@ -630,7 +630,7 @@ function GitAdapter:stream_line_trace_data(state)
     end,
   })
 
-  job = Job({
+  job = Job.new({
     command = self:bin(),
     args = utils.vec_join(
       self:args(),
@@ -1284,7 +1284,7 @@ end)
 GitAdapter.fh_retry_commit = async.wrap(function(self, rev_arg, state, opt, callback)
   opt = opt or {}
 
-  local job = Job({
+  local job = Job.new({
     command = self:bin(),
     args = utils.vec_join(
       self:args(),
@@ -2249,13 +2249,13 @@ GitAdapter.tracked_files = async.wrap(function(self, left, right, args, kind, op
   local rename_threshold = opt.rename_threshold or config.get_config().rename_threshold
   local rename_flag = rename_threshold and ("-M" .. rename_threshold .. "%") or nil
 
-  local namestat_job = Job({
+  local namestat_job = Job.new({
     command = self:bin(),
     args = git_status.diff_args(self:args(), args, "--name-status", rename_flag),
     cwd = self.ctx.toplevel,
     log_opt = log_opt,
   })
-  local numstat_job = Job({
+  local numstat_job = Job.new({
     command = self:bin(),
     args = git_status.diff_args(self:args(), args, "--numstat", rename_flag),
     cwd = self.ctx.toplevel,
@@ -2268,7 +2268,7 @@ GitAdapter.tracked_files = async.wrap(function(self, left, right, args, kind, op
   local numstat_count
 
   for attempt = 1, max_attempts do
-    local multi_job = MultiJob({ namestat_job, numstat_job }, { retry = 2 })
+    local multi_job = MultiJob.new({ namestat_job, numstat_job }, { retry = 2 })
 
     local ok, err = await(multi_job)
 
@@ -2370,7 +2370,7 @@ GitAdapter.tracked_files = async.wrap(function(self, left, right, args, kind, op
 end)
 
 GitAdapter.untracked_files = async.wrap(function(self, left, right, opt, callback)
-  local job = Job({
+  local job = Job.new({
     command = self:bin(),
     args = utils.vec_join(
       self:args(),

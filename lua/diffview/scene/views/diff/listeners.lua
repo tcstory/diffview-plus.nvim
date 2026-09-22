@@ -3,7 +3,7 @@ local lazy = require("diffview.lazy")
 
 local EventName = lazy.access("diffview.events", "EventName") ---@type EventName|LazyModule
 local RevType = lazy.access("diffview.vcs.rev", "RevType") ---@type RevType|LazyModule
-local actions = lazy.require("diffview.actions") --[[@as DiffviewActions ]]
+local actions = lazy.require("diffview.actions.builtins") --[[@as DiffviewActions ]]
 local config = lazy.require("diffview.config") ---@module "diffview.config"
 local lib = lazy.require("diffview.lib") ---@module "diffview.lib"
 local utils = lazy.require("diffview.utils") ---@module "diffview.utils"
@@ -179,7 +179,7 @@ return function(view)
       retry_auto_close()
     end,
     file_open_new = function(_, entry)
-      -- `file_open_new` is bridged via `DiffviewGlobal.emitter` →
+      -- `file_open_new` is bridged via the runtime emitter →
       -- current view's emitter, so while multiple views are restoring
       -- in parallel an event from view A can arrive bound to view B's
       -- closure. Drop events that aren't ours.

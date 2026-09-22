@@ -258,9 +258,9 @@ function Layout:files()
 end
 
 ---Symbols whose attached `vcs.File` is borrowed (owned elsewhere) and
----therefore must not be destroyed by `FileEntry:destroy`. Pinned variants
----set this to `{ "b" }` so the view-owned working-tree File survives entry
----teardown. Default: own everything.
+---therefore must not be destroyed by `FileEntry:destroy`. FileHistory's
+---pin-local state sets this per instance so the view-owned working-tree File
+---survives entry teardown. Default: own everything.
 ---@type string[]
 Layout.shared_symbols = {}
 

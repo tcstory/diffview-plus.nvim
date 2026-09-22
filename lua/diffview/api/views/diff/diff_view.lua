@@ -1,7 +1,7 @@
 local async = require("diffview.async")
 local lazy = require("diffview.lazy")
 
--- Ensure bootstrap has run before accessing DiffviewGlobal.
+-- Ensure runtime services have been initialized.
 require("diffview.bootstrap")
 
 local DiffView = lazy.access("diffview.scene.views.diff.diff_view", "DiffView") ---@type DiffView|LazyModule

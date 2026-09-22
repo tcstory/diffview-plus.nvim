@@ -1,3 +1,4 @@
+local ctx = require("diffview.runtime.context")
 local helpers = require("diffview.tests.helpers")
 local VCSAdapter = require("diffview.vcs.adapter").VCSAdapter
 
@@ -10,16 +11,16 @@ describe("diffview.vcs.adapter.bootstrap_preamble", function()
 
   before_each(function()
     orig_executable = vim.fn.executable
-    orig_logger_error = DiffviewGlobal.logger.error
+    orig_logger_error = ctx.logger.error
     logged_messages = {}
-    DiffviewGlobal.logger.error = function(_, msg)
+    ctx.logger.error = function(_, msg)
       logged_messages[#logged_messages + 1] = msg
     end
   end)
 
   after_each(function()
     vim.fn.executable = orig_executable
-    DiffviewGlobal.logger.error = orig_logger_error
+    ctx.logger.error = orig_logger_error
   end)
 
   it("returns the err function when the executable is found", function()

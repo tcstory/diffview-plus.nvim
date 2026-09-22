@@ -61,7 +61,7 @@ local JobStatus = oop.enum({
   FATAL = 5,
 })
 
----@type diffview.Job[]
+---@type diffview.ProcessTask[]
 local sync_jobs = {}
 local job_queue_sem = Semaphore(1)
 
@@ -70,11 +70,11 @@ local SYNC_JOB_TIMEOUT = 30000
 
 local uv = vim.uv
 
----@type table<diffview.Job, uv_timer_t>
+---@type table<diffview.ProcessTask, uv_timer_t>
 local job_watchdogs = {}
 
 ---Start a watchdog timer that kills the job if it doesn't finish in time.
----@param job diffview.Job
+---@param job diffview.ProcessTask
 local function start_job_watchdog(job)
   local timer = uv.new_timer()
   if not timer then
@@ -97,7 +97,7 @@ local function start_job_watchdog(job)
 end
 
 ---Cancel and clean up the watchdog timer for a job.
----@param job diffview.Job
+---@param job diffview.ProcessTask
 local function cancel_job_watchdog(job)
   local timer = job_watchdogs[job]
   if timer then
@@ -108,7 +108,7 @@ local function cancel_job_watchdog(job)
   end
 end
 
----@param job diffview.Job
+---@param job diffview.ProcessTask
 M.resume_sync_queue = async.void(function(job)
   local permit = await(job_queue_sem:acquire()) --[[@as Permit ]]
   local idx = utils.vec_indexof(sync_jobs, job)
@@ -123,7 +123,7 @@ M.resume_sync_queue = async.void(function(job)
   end
 end)
 
----@param job diffview.Job
+---@param job diffview.ProcessTask
 M.queue_sync_job = async.void(function(job)
   job:on_exit(function()
     cancel_job_watchdog(job)

@@ -141,7 +141,7 @@ describe("cycle_layout empty resolved list fallback (1b778b6)", function()
   -- a config that resolves to an empty list and ensure that it falls
   -- back to the default layouts without throwing an error.
 
-  local actions = require("diffview.actions")
+  local actions = require("diffview.actions.builtins")
   local config = require("diffview.config")
 
   local saved_config

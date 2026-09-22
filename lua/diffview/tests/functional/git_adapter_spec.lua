@@ -2,7 +2,7 @@ local async = require("diffview.async")
 local Diff2 = require("diffview.scene.layouts.diff_2").Diff2
 local GitAdapter = require("diffview.vcs.adapters.git").GitAdapter
 local GitRev = require("diffview.vcs.adapters.git.rev").GitRev
-local Job = require("diffview.job").Job
+local Job = require("diffview.runtime.process_task").ProcessTask
 local RevType = require("diffview.vcs.rev").RevType
 local arg_parser = require("diffview.arg_parser")
 local test_utils = require("diffview.tests.helpers")
@@ -586,60 +586,34 @@ describe("diffview.vcs.adapters.git", function()
 
   describe("GIT_OPTIONAL_LOCKS in job environment", function()
     it("includes GIT_OPTIONAL_LOCKS=0 when env is provided", function()
-      local job = Job({
+      local job = Job.new({
         command = "echo",
         args = { "test" },
         env = { FOO = "bar" },
       })
 
-      local found = false
-      for _, entry in ipairs(job.env) do
-        if entry == "GIT_OPTIONAL_LOCKS=0" then
-          found = true
-          break
-        end
-      end
-
-      assert.True(found, "Job env must include GIT_OPTIONAL_LOCKS=0")
+      assert.equals("0", job.env.GIT_OPTIONAL_LOCKS)
+      assert.equals("bar", job.env.FOO)
     end)
 
     it("includes GIT_OPTIONAL_LOCKS=0 when env is defaulted from os_environ", function()
-      local job = Job({
+      local job = Job.new({
         command = "echo",
         args = { "test" },
       })
 
-      local found = false
-      for _, entry in ipairs(job.env) do
-        if entry == "GIT_OPTIONAL_LOCKS=0" then
-          found = true
-          break
-        end
-      end
-
-      assert.True(found, "Job env must include GIT_OPTIONAL_LOCKS=0 even with default env")
+      assert.equals("0", job.env.GIT_OPTIONAL_LOCKS)
     end)
 
     it("preserves other env vars alongside GIT_OPTIONAL_LOCKS", function()
-      local job = Job({
+      local job = Job.new({
         command = "echo",
         args = { "test" },
         env = { MY_VAR = "hello" },
       })
 
-      local found_locks = false
-      local found_custom = false
-      for _, entry in ipairs(job.env) do
-        if entry == "GIT_OPTIONAL_LOCKS=0" then
-          found_locks = true
-        end
-        if entry == "MY_VAR=hello" then
-          found_custom = true
-        end
-      end
-
-      assert.True(found_locks, "GIT_OPTIONAL_LOCKS=0 must be present")
-      assert.True(found_custom, "Custom env var must also be present")
+      assert.equals("0", job.env.GIT_OPTIONAL_LOCKS)
+      assert.equals("hello", job.env.MY_VAR)
     end)
   end)
 
@@ -748,7 +722,7 @@ describe("diffview.vcs.adapters.git", function()
           -- Stand-in for the view's pin_local cache: hand out a single
           -- distinguishable `vcs.File`-like instance regardless of path so
           -- we can assert it's the b-side that the FileEntry ended up with.
-          -- Identity equality is what `Diff2*Pinned.shared_symbols` and
+          -- Identity equality is what the layout's borrowed b-symbol and
           -- the view's destruction path rely on.
           local shared = { path = "shared.txt", rev = adapter.Rev(RevType.LOCAL) }
           local lookups = {}
@@ -916,7 +890,7 @@ describe("diffview.vcs.adapters.git", function()
           -- Without this flag, the pinned `Diff2` layout's `should_null`
           -- would invert the standard semantics for revs.a (treating it as
           -- the commit being browsed) and mishandle added/deleted files in
-          -- the synthetic entry. See `Diff2HorPinned.should_null`.
+          -- the synthetic entry. See the pin-local null-side contract.
           assert.is_true(file.revs.a.pin_local_synthetic)
         end)
 

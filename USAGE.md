@@ -41,9 +41,9 @@ default_args = {
 }
 ```
 
-From the file panel you can press `L` to open the commit log for all the
-changes. This lets you check the full commit messages for all the commits
-involved.
+From the file panel, open the action palette (`?`) and choose **Commit log** to
+inspect the full commit messages. If you use this often, map the stable action
+ID `file.open_commit_log` in `keymaps.file_panel`.
 
 ![diffview symdiff demo](https://user-images.githubusercontent.com/2786478/229858634-c751ebe3-cc43-48de-adda-bf0b71fa2ce7.png)
 

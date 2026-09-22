@@ -383,7 +383,7 @@ end
 ---@field debug_level? integer
 ---@field debuginfo? debuginfo
 
----@param job diffview.Job
+---@param job diffview.ProcessTask
 ---@param opt? Logger.log_job.Opt
 function Logger:log_job(job, opt)
   opt = opt or {}

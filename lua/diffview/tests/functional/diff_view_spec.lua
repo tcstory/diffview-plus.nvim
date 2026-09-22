@@ -1,3 +1,4 @@
+local ctx = require("diffview.runtime.context")
 local config = require("diffview.config")
 local test_utils = require("diffview.tests.helpers")
 local EventEmitter = require("diffview.events").EventEmitter
@@ -28,15 +29,15 @@ describe("diffview.scene.views.diff.DiffView", function()
   local orig_emitter, original_config
 
   before_each(function()
-    orig_emitter = DiffviewGlobal.emitter
-    DiffviewGlobal.emitter = EventEmitter()
+    orig_emitter = ctx.emitter
+    ctx.emitter = EventEmitter()
     original_config = vim.deepcopy(config.get_config())
     -- Disable icons so render does not require nvim-web-devicons.
     config.get_config().use_icons = false
   end)
 
   after_each(function()
-    DiffviewGlobal.emitter = orig_emitter
+    ctx.emitter = orig_emitter
     config.setup(original_config)
   end)
 

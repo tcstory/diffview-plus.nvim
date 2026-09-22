@@ -21,8 +21,7 @@ M._handles = {}
 
 local function dstring(object)
   -- Use context.is_ready() to check whether bootstrap has completed.
-  -- `async.lua` is loaded before bootstrap finishes, so DiffviewGlobal.logger
-  -- may not exist yet at module-load time.
+  -- `async.lua` can be loaded before bootstrap initializes runtime services.
   local ctx = require("diffview.runtime.context")
   if not ctx.is_ready() then
     return ""
@@ -469,7 +468,7 @@ function M.wrap(func, nparams)
   end
 end
 
----@param waitable Waitable
+---@param waitable Waitable|diffview.ProcessTask|diffview.ProcessGroup
 ---@return any ... # Any values returned by the waitable
 function M.await(waitable)
   return waitable:await()

@@ -32,6 +32,10 @@ function M.setup()
   -- state writes. Disable them so tests can create named buffers freely.
   vim.opt.swapfile = false
   vim.opt.runtimepath:append(M.root())
+  -- Keep plugin modules resolvable when a functional test temporarily changes
+  -- cwd into a fixture repository. Lua's default `./lua` path follows cwd and
+  -- otherwise turns a failed cleanup into a cascade of unrelated load errors.
+  package.path = M.root("lua/?.lua") .. ";" .. M.root("lua/?/init.lua") .. ";" .. package.path
   vim.opt.packpath = { M.root(".tests/site") }
   M.load("nvim-lua/plenary.nvim")
   vim.env.XDG_CONFIG_HOME = M.root(".tests/config")

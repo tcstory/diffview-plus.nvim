@@ -78,12 +78,10 @@ Defined in `lua/diffview/config.lua`.  Current top-level keys:
 | `commit_log_panel` | table | Commit log panel appearance |
 | `default_args` | table | Default CLI args per command |
 | `hooks` | table | Lifecycle hooks (callbacks) |
-| `keymaps` | table | Per-layout keymap tables (~98 entries) |
+| `keymaps` | table | `minimal`/`none` preset, interaction mode, and action-ID mappings |
 
-> [!WARNING]
-> Phase 3 replaced the built-in legacy mappings with `preset = "minimal" |
-> "none"`. Context tables accept stable action IDs as their rhs. See
-> `docs/phase3-actions.md`.
+Legacy `key_bindings` and `keymaps.disable_defaults` are rejected. Context
+tables accept stable action IDs as their rhs. See `docs/migration-v2.md`.
 
 ---
 
@@ -110,30 +108,18 @@ vim.api.nvim_create_autocmd("User", {
 
 ---
 
-## 5. Notable Internal Globals (not public API, but widely referenced in tests)
+## 5. Internal runtime state
 
-| Global | Purpose |
-|--------|---------|
-| `DiffviewGlobal.logger` | Debug logger (level controlled by `DEBUG_DIFFVIEW` env) |
-| `DiffviewGlobal.emitter` | Internal `EventEmitter` instance |
-| `DiffviewGlobal.state` | Active views and misc runtime state |
-| `DiffviewGlobal.debug_level` | Integer; set from `$DEBUG_DIFFVIEW` |
-
-> [!NOTE]
-> `DiffviewGlobal` is scheduled for removal in Phase 2.
-> The replacement is a module-local `RuntimeContext` + explicit `Store`.
+`_G.DiffviewGlobal` was removed. Shared bootstrap services live in
+`diffview.runtime.context`; view-specific state belongs to explicit stores.
 
 ---
 
-## 6. `require("diffview.config").actions` Namespace
+## 6. Actions API
 
-`config.actions` exposes the same action functions as `actions.lua` but
-pre-bound to the current config context.  This is how keymap callbacks
-reference actions (e.g., `config.actions.next_entry`).
-
-This namespace is an **internal implementation detail**, not a stable public
-API, but is referenced by users who define custom keymaps in their config.
-It will remain available in Phase 3, renamed to reference ActionRegistry IDs.
+`require("diffview.api").actions` lists stable action specs and resolves action
+callbacks. `require("diffview.config").actions` and
+`diffview.config.diffview_callback()` are no longer compatibility surfaces.
 
 ---
 
@@ -141,4 +127,5 @@ It will remain available in Phase 3, renamed to reference ActionRegistry IDs.
 
 | Date | Change |
 |------|--------|
+| 2026-09-22 | Phase 10 removals and migration links |
 | 2026-09-19 | Initial inventory created (Phase 0 baseline) |

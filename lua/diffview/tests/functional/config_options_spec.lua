@@ -735,9 +735,6 @@ describe("config validation: table-shape guards", function()
     end)
   end)
 
-  -- The deprecation block in `setup()` runs before per-field validation and
-  -- dereferences these panel tables, so the early table guard must replace
-  -- non-table values before they reach that block.
   it("falls back when file_panel is a non-table (boolean)", function()
     with_silent_warn(function()
       local conf = setup_with({ file_panel = false })
@@ -757,17 +754,11 @@ describe("config validation: table-shape guards", function()
     end)
   end)
 
-  it("ignores deprecated panel keys when win_config is a function", function()
-    with_silent_warn(function()
-      local fn = function()
-        return { position = "left", width = 30 }
-      end
-      -- `width` is a deprecated panel key that the migration tries to write
-      -- into `win_config`. When `win_config` is a function, the migration
-      -- must skip the assignment instead of crashing.
-      local conf = setup_with({ file_panel = { width = 30, win_config = fn } })
-      assert.equals(fn, conf.file_panel.win_config)
-    end)
+  it("rejects removed panel keys with a migration target", function()
+    local ok, err = pcall(setup_with, { file_panel = { width = 30 } })
+    assert.is_false(ok)
+    assert.truthy(tostring(err):find("file_panel.width", 1, true))
+    assert.truthy(tostring(err):find("file_panel.win_config.width", 1, true))
   end)
 
   -- The merge loop at the end of `setup()` indexes
@@ -792,9 +783,6 @@ describe("config validation: table-shape guards", function()
 end)
 
 describe("config validation: hooks and keymaps", function()
-  -- `setup()` iterates `pairs(hooks)` and indexes `keymaps.disable_defaults`,
-  -- so a non-table value for either would crash setup before these guards
-  -- were added.
   it("falls back when hooks is a non-table", function()
     with_silent_warn(function(warned)
       local conf = setup_with({ hooks = "nope" })
@@ -803,9 +791,6 @@ describe("config validation: hooks and keymaps", function()
     end)
   end)
 
-  -- A number (rather than `false`) is used here because it is truthy: it
-  -- exercises both the `keymaps.disable_defaults` index and the keymap merge,
-  -- which reads `user_config.keymaps` and would otherwise error on a non-table.
   it("falls back when keymaps is a non-table", function()
     with_silent_warn(function(warned)
       local conf = setup_with({ keymaps = 5 })
@@ -816,12 +801,11 @@ describe("config validation: hooks and keymaps", function()
     end)
   end)
 
-  it("migrates keymaps.disable_defaults to the none preset", function()
-    with_silent_warn(function(warned)
-      local conf = setup_with({ keymaps = { disable_defaults = "yes" } })
-      assert.equals("none", conf.keymaps.preset)
-      assert.is_true(#warned > 0)
-    end)
+  it("rejects removed keymaps.disable_defaults with a migration target", function()
+    local ok, err = pcall(setup_with, { keymaps = { disable_defaults = true } })
+    assert.is_false(ok)
+    assert.truthy(tostring(err):find("keymaps.disable_defaults", 1, true))
+    assert.truthy(tostring(err):find("keymaps.preset = 'none'", 1, true))
   end)
 
   it("falls back when keymaps.preset is invalid", function()

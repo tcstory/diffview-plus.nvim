@@ -32,7 +32,7 @@ local M = {}
 ---@field pin_local? boolean # When true, the b-window stays bound to the working-tree LOCAL buffer across log navigation; resolved from `--pin-local` or `view.file_history.pin_local`.
 ---@field pinned_path? string # Working-tree path the b-window is pinned to. Seeded from `path_args[1]` for single-file pinning; the cursor follower updates it when the user highlights a file row in multi-file mode.
 ---@field _pinned_cursor_follow? CancellableFn # Debounced CursorMoved handler installed in pin_local mode; closed in `close()` to release the underlying uv timer.
----@field _pinned_b_files table<string, vcs.File> # View-owned cache of working-tree `vcs.File` instances keyed by path. Each pinned-mode b-window across the entire history reuses the entry for its path, so identity is stable across panel refreshes; entry destruction skips these files (see `Diff2*Pinned.shared_symbols`) and the view destroys them in `close()`.
+---@field _pinned_b_files table<string, vcs.File> # View-owned cache of working-tree `vcs.File` instances keyed by path. Each pin-local b-window across the entire history reuses the entry for its path, so identity is stable across panel refreshes; entry destruction skips files whose standard layout instance marks the b-symbol as borrowed, and the view destroys them in `close()`.
 local FileHistoryView = oop.create_class("FileHistoryView", StandardView.__get())
 
 ---@return boolean
@@ -121,9 +121,9 @@ function FileHistoryView:close()
 
     -- Entry teardown (including `_pin_overlays`) is owned by
     -- `FileHistoryPanel:destroy()`, called from `StandardView:close()` below.
-    -- The pinned working-tree files belong to the view, not to entries
-    -- (every pinned-mode b-window references them via
-    -- `Diff2*Pinned.shared_symbols`), so the view detaches them here.
+    -- The pin-local working-tree files belong to the view, not to entries
+    -- (each standard layout marks the b-symbol as borrowed), so the view
+    -- detaches them here.
     self:_destroy_pinned_b_files()
 
     -- Clean up LOCAL buffers created by diffview that the user didn't have open before.
@@ -315,8 +315,8 @@ end
 -- When `pin_local` is true, follow the panel cursor so any movement (j/k,
 -- gg, search, etc.) updates the right-side diff against the highlighted
 -- entry without the user having to confirm with <cr>. The b-side stays
--- pinned via Diff2HorPinned/Diff2VerPinned, so only the commit-side window
--- actually rebuilds.
+-- borrowed through the standard layout instance, so only the commit-side
+-- window actually rebuilds.
 function FileHistoryView:_install_pinned_cursor_follower()
   if not self:is_pin_local() then
     return
@@ -541,21 +541,6 @@ function FileHistoryView:should_show_panel()
   return self:resolve_panel_visibility(config.get_config().file_history_panel.show)
 end
 
--- Compatibility name map for configurations/integrations that still hand us
--- a pre-Phase-8 specialized pinned class. Production uses the ordinary name.
-local pinned_variant = {
-  diff1_plain = "diff1_plain_pinned",
-  diff1_inline = "diff1_inline_pinned",
-  diff2_horizontal = "diff2_horizontal_pinned",
-  diff2_vertical = "diff2_vertical_pinned",
-}
-
--- Normalize those legacy names at every layout-selection boundary.
-local unpinned_variant = {}
-for unpinned, pinned in pairs(pinned_variant) do
-  unpinned_variant[pinned] = unpinned
-end
-
 ---@override
 ---@return Layout # (class) The default layout class.
 function FileHistoryView:get_default_layout()
@@ -568,32 +553,21 @@ function FileHistoryView:get_default_layout()
   -- Pin-local is a ViewState mode. Borrowed b-side ownership and null
   -- semantics are attached to each FileEntry/Layout instance, so layout
   -- selection no longer spreads the mode across dedicated subclasses.
-  local resolved = unpinned_variant[name] or name
-
-  return config.name_to_layout(resolved --[[@as string ]])
+  return config.name_to_layout(name --[[@as string ]])
 end
 
----Map a legacy pinned class to its ordinary sibling.
+---Keep file-history layout selection within one- or two-pane layouts when
+---pin-local is active. Borrowed ownership lives on each layout instance.
 ---@param layout_class Layout (class)
 ---@return Layout (class)
-function FileHistoryView:unpinned_layout(layout_class)
-  local sibling = unpinned_variant[layout_class.name]
-  if not sibling then
-    return layout_class
-  end
-  return config.name_to_layout(sibling --[[@as string ]])
-end
-
----Normalize legacy pinned classes. In pin-local mode, merge-only layouts are
----rejected in favour of a standard Diff2; ownership remains ViewState-driven.
----@param layout_class Layout (class)
----@return Layout (class)
-function FileHistoryView:resolve_pinned_layout(layout_class)
-  local name = layout_class.name
-  if unpinned_variant[name] then
-    return config.name_to_layout(unpinned_variant[name] --[[@as string ]])
-  end
-  if not self:is_pin_local() or pinned_variant[name] then
+function FileHistoryView:resolve_history_layout(layout_class)
+  local supported = {
+    diff1_plain = true,
+    diff1_inline = true,
+    diff2_horizontal = true,
+    diff2_vertical = true,
+  }
+  if not self:is_pin_local() or supported[layout_class.name] then
     return layout_class
   end
   return FileHistoryView.get_default_diff2()

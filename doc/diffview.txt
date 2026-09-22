@@ -1673,16 +1673,14 @@ keymaps                                         *diffview-config-keymaps*
                                                 *diffview-actions*
 Actions ~
 
-        Actions are key-mappable functions. You can access an action through
-        the config module: >lua
+        Actions have stable IDs. Resolve a callback through the public API: >lua
 
-                require("diffview.config").actions.{action_name}
+                require("diffview.api").actions.callback("diff.toggle_stage_entry")
 <
 
-        Where {action_name} is the name of the action you're accessing. Many
-        actions are contextual and will behave slightly differently depending
-        on what context they were called from. The various actions are
-        described with all the contexts in which they have a function.
+        Prefer putting the ID directly in a keymap rhs, as shown above. Many
+        actions are contextual; the registry exposes their availability and a
+        disabled reason to palettes and clickable controls.
         Following are the different contexts described alongside possible
         subjects, upon which actions called from their context, will act on.
 

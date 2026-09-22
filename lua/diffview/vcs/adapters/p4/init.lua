@@ -6,10 +6,10 @@ local Diff2Hor = require("diffview.scene.layouts.diff_2_hor").Diff2Hor
 local FileEntry = require("diffview.scene.file_entry").FileEntry
 local FlagOption = require("diffview.vcs.flag_option").FlagOption
 local P4Rev = require("diffview.vcs.adapters.p4.rev").P4Rev
-local Job = require("diffview.job").Job
+local Job = require("diffview.runtime.process_task").ProcessTask
 local JobStatus = require("diffview.vcs.utils").JobStatus
 local LogEntry = require("diffview.vcs.log_entry").LogEntry
-local MultiJob = require("diffview.multi_job").MultiJob
+local MultiJob = require("diffview.runtime.process_group").ProcessGroup
 local RevType = require("diffview.vcs.rev").RevType
 local VCSAdapter = require("diffview.vcs.adapter").VCSAdapter
 local arg_parser = require("diffview.arg_parser")
@@ -461,7 +461,7 @@ P4Adapter.file_history_worker = async.void(function(self, out_stream, opt)
     path_spec .. rev_spec
   )
 
-  local changes_job = Job({
+  local changes_job = Job.new({
     command = self:bin(),
     args = changes_cmd,
     cwd = self.ctx.toplevel,
@@ -514,7 +514,7 @@ P4Adapter.file_history_worker = async.void(function(self, out_stream, opt)
       return
     end -- Check if consumer closed
 
-    local describe_job = Job({
+    local describe_job = Job.new({
       command = self:bin(),
       args = { "describe", cl },
       cwd = self.ctx.toplevel,
@@ -734,7 +734,7 @@ P4Adapter.tracked_files = async.wrap(function(self, left, right, args, kind, opt
     -- Use `p4 opened //...` to list files opened for edit/add/delete etc.
     -- Combine results for a complete view.
 
-    local diff_job = Job({
+    local diff_job = Job.new({
       command = self:bin(),
       -- -sl lists files differing, -f forces diff even if identical (for adds/deletes)
       args = utils.vec_join(
@@ -747,7 +747,7 @@ P4Adapter.tracked_files = async.wrap(function(self, left, right, args, kind, opt
       cwd = self.ctx.toplevel,
       log_opt = { label = log_opt.label .. "(diff)" },
     })
-    local opened_job = Job({
+    local opened_job = Job.new({
       command = self:bin(),
       args = utils.vec_join("opened", path_spec),
       cwd = self.ctx.toplevel,
@@ -782,7 +782,7 @@ P4Adapter.tracked_files = async.wrap(function(self, left, right, args, kind, opt
     -- parse even when paths contain spaces.
     local depot_to_local = {}
     if #depot_paths > 0 then
-      local where_job = Job({
+      local where_job = Job.new({
         command = self:bin(),
         args = utils.vec_join("-ztag", "where", depot_paths),
         cwd = self.ctx.toplevel,
@@ -863,7 +863,7 @@ P4Adapter.tracked_files = async.wrap(function(self, left, right, args, kind, opt
       end, path_spec)
     )
 
-    local diff_job = Job({
+    local diff_job = Job.new({
       command = self:bin(),
       args = diff_cmd,
       cwd = self.ctx.toplevel,
@@ -963,7 +963,7 @@ P4Adapter.untracked_files = async.wrap(function(self, left, right, opt, callback
   local path_spec = #path_args > 0 and path_args or { "//..." }
 
   -- `p4 status` or `p4 reconcile -nlad` lists local files not in depot or opened.
-  local status_job = Job({
+  local status_job = Job.new({
     command = self:bin(),
     args = utils.vec_join("reconcile", "-nl", path_spec), -- -n: preview, -l: local files not in depot
     cwd = self.ctx.toplevel,
@@ -1028,7 +1028,7 @@ P4Adapter.file_restore = async.wrap(function(self, path, kind, commit, callback)
   -- `p4 revert` reverts opened files to their state before being opened,
   -- or removes added files. It doesn't restore to a specific historical commit.
   -- If the goal is to revert changes made in the workspace:
-  local revert_job = Job({
+  local revert_job = Job.new({
     command = self:bin(),
     args = { "revert", path },
     cwd = self.ctx.toplevel,

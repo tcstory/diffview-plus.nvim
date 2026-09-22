@@ -1,21 +1,14 @@
 require("diffview.bootstrap")
 
----@diagnostic disable: deprecated
 local EventEmitter = require("diffview.events").EventEmitter
-local actions = require("diffview.actions")
 local lazy = require("diffview.lazy")
 
 local Diff1 = lazy.access("diffview.scene.layouts.diff_1", "Diff1") ---@type Diff1|LazyModule
 local Diff1Inline = lazy.access("diffview.scene.layouts.diff_1_inline", "Diff1Inline") ---@type Diff1Inline|LazyModule
-local Diff1InlinePinned =
-  lazy.access("diffview.scene.layouts.diff_1_inline_pinned", "Diff1InlinePinned") ---@type Diff1InlinePinned|LazyModule
-local Diff1Pinned = lazy.access("diffview.scene.layouts.diff_1_pinned", "Diff1Pinned") ---@type Diff1Pinned|LazyModule
 local Diff1Raw = lazy.access("diffview.scene.layouts.diff_1_raw", "Diff1Raw") ---@type Diff1Raw|LazyModule
 local Diff2 = lazy.access("diffview.scene.layouts.diff_2", "Diff2") ---@type Diff2|LazyModule
 local Diff2Hor = lazy.access("diffview.scene.layouts.diff_2_hor", "Diff2Hor") ---@type Diff2Hor|LazyModule
-local Diff2HorPinned = lazy.access("diffview.scene.layouts.diff_2_hor_pinned", "Diff2HorPinned") ---@type Diff2HorPinned|LazyModule
 local Diff2Ver = lazy.access("diffview.scene.layouts.diff_2_ver", "Diff2Ver") ---@type Diff2Ver|LazyModule
-local Diff2VerPinned = lazy.access("diffview.scene.layouts.diff_2_ver_pinned", "Diff2VerPinned") ---@type Diff2VerPinned|LazyModule
 local Diff3 = lazy.access("diffview.scene.layouts.diff_3", "Diff3") ---@type Diff3|LazyModule
 local Diff3Hor = lazy.access("diffview.scene.layouts.diff_3_hor", "Diff3Hor") ---@type Diff3Hor|LazyModule
 local Diff3Mixed = lazy.access("diffview.scene.layouts.diff_3_mixed", "Diff3Mixed") ---@type Diff3Mixed|LazyModule
@@ -28,13 +21,13 @@ local M = {}
 
 local setup_done = false
 
----@deprecated
 function M.diffview_callback(cb_name)
-  if cb_name == "select" then
-    -- Reroute deprecated action
-    return actions.select_entry
-  end
-  return actions[cb_name]
+  error(
+    ("diffview.config.diffview_callback('%s') was removed; use require('diffview.api').actions.callback('<action-id>')"):format(
+      tostring(cb_name)
+    ),
+    2
+  )
 end
 
 -- Layout aliases used across multiple view kinds and cycle_layouts. The
@@ -621,7 +614,6 @@ M.defaults = {
   ---@class DiffviewKeymapsConfig.user
   ---@field preset? "minimal"|"none"
   ---@field interaction? "mouse"|"hybrid"|"keyboard"
-  ---@field disable_defaults? boolean Deprecated; use `preset = "none"`.
   ---@field view? DiffviewKeymapEntry[]
   ---@field diff1? DiffviewKeymapEntry[]
   ---@field diff1_inline? DiffviewKeymapEntry[]
@@ -864,14 +856,10 @@ function M.get_log_options(single_file, t, vcs)
 end
 
 ---@alias LayoutName "diff1_plain"
----       | "diff1_plain_pinned"
 ---       | "diff1_inline"
----       | "diff1_inline_pinned"
 ---       | "diff1_raw"
 ---       | "diff2_horizontal"
----       | "diff2_horizontal_pinned"
 ---       | "diff2_vertical"
----       | "diff2_vertical_pinned"
 ---       | "diff3_horizontal"
 ---       | "diff3_vertical"
 ---       | "diff3_mixed"
@@ -879,14 +867,10 @@ end
 
 local layout_map = {
   diff1_plain = Diff1,
-  diff1_plain_pinned = Diff1Pinned,
   diff1_inline = Diff1Inline,
-  diff1_inline_pinned = Diff1InlinePinned,
   diff1_raw = Diff1Raw,
   diff2_horizontal = Diff2Hor,
-  diff2_horizontal_pinned = Diff2HorPinned,
   diff2_vertical = Diff2Ver,
-  diff2_vertical_pinned = Diff2VerPinned,
   diff3_horizontal = Diff3Hor,
   diff3_vertical = Diff3Ver,
   diff3_mixed = Diff3Mixed,
@@ -896,6 +880,14 @@ local layout_map = {
 ---@param layout_name LayoutName
 ---@return Layout
 function M.name_to_layout(layout_name)
+  if tostring(layout_name):find("_pinned$", 1, false) then
+    error(
+      ("Layout '%s' was removed; use the corresponding standard layout with file-history pin_local mode"):format(
+        layout_name
+      ),
+      2
+    )
+  end
   assert(layout_map[layout_name], "Invalid layout name: " .. layout_name)
 
   return layout_map[layout_name].__get()
@@ -920,7 +912,7 @@ end
 
 function M.find_option_keymap(t)
   for _, mapping in ipairs(t) do
-    if mapping[5] == "layout.options" or (mapping[3] and mapping[3] == actions.options) then
+    if mapping[5] == "layout.options" then
       return mapping
     end
   end
@@ -1286,6 +1278,53 @@ end
 function M.setup(user_config)
   user_config = user_config or {}
 
+  local removed = {}
+  local function reject(value, path, replacement)
+    if value ~= nil then
+      removed[#removed + 1] = ("'%s' (use %s)"):format(path, replacement)
+    end
+  end
+  reject(user_config.key_bindings --[[@as any]], "key_bindings", "keymaps with action IDs")
+  if type(user_config.keymaps) == "table" then
+    reject(
+      user_config.keymaps.disable_defaults --[[@as any]],
+      "keymaps.disable_defaults",
+      "keymaps.preset = 'none'"
+    )
+  end
+  for _, panel_name in ipairs({ "file_panel", "file_history_panel" }) do
+    local panel = user_config[panel_name]
+    if type(panel) == "table" then
+      reject(panel.use_icons, panel_name .. ".use_icons", "the top-level use_icons option")
+      for _, option in ipairs({ "position", "width", "height" }) do
+        reject(panel[option], panel_name .. "." .. option, panel_name .. ".win_config." .. option)
+      end
+    end
+  end
+  local history = user_config.file_history_panel
+  local log_options = type(history) == "table" and history.log_options or nil
+  if type(log_options) == "table" then
+    for _, option in ipairs({
+      "single_file",
+      "multi_file",
+      "max_count",
+      "follow",
+      "all",
+      "merges",
+      "no_merges",
+      "reverse",
+    }) do
+      reject(
+        log_options[option],
+        "file_history_panel.log_options." .. option,
+        "file_history_panel.log_options.<adapter>.<scope>"
+      )
+    end
+  end
+  if #removed > 0 then
+    error("Removed Diffview configuration: " .. table.concat(removed, "; "), 2)
+  end
+
   M._config = vim.tbl_deep_extend("force", utils.tbl_deep_clone(M.defaults), user_config)
   ---@type EventEmitter
   M.user_emitter = EventEmitter()
@@ -1296,97 +1335,6 @@ function M.setup(user_config)
   -- back to defaults.
   validate.table(M._config, "file_panel", M.defaults.file_panel)
   validate.table(M._config, "file_history_panel", M.defaults.file_history_panel)
-
-  --#region DEPRECATION NOTICES
-
-  ---@diagnostic disable-next-line: undefined-field -- Deprecated legacy key, kept for warning-only detection.
-  if type(M._config.file_panel.use_icons) ~= "nil" then
-    utils.warn("'file_panel.use_icons' has been deprecated. See ':h diffview.changelog-64'.")
-  end
-
-  -- Move old panel preoperties to win_config
-  local old_win_config_spec = { "position", "width", "height" }
-  for _, panel_name in ipairs({ "file_panel", "file_history_panel" }) do
-    local panel_config = M._config[panel_name]
-    ---@cast panel_config table
-    local notified = false
-
-    for _, option in ipairs(old_win_config_spec) do
-      if panel_config[option] ~= nil then
-        if not notified then
-          utils.warn(
-            ("'%s.{%s}' has been deprecated. See ':h diffview.changelog-136'."):format(
-              panel_name,
-              fmt_enum(old_win_config_spec, true)
-            )
-          )
-          notified = true
-        end
-        -- `win_config` may legitimately be a function (validated below); only
-        -- migrate into it when it's still the table shape the old keys
-        -- expected. Otherwise drop the deprecated value silently.
-        if type(panel_config.win_config) == "table" then
-          panel_config.win_config[option] = panel_config[option]
-        end
-        panel_config[option] = nil
-      end
-    end
-  end
-
-  -- Move old keymaps
-  ---@diagnostic disable: undefined-field, inject-field -- `key_bindings` is a deprecated legacy key; the block migrates it onto `keymaps` and clears it.
-  if user_config.key_bindings then
-    M._config.keymaps = vim.tbl_deep_extend("force", M._config.keymaps, user_config.key_bindings)
-    user_config.keymaps = user_config.key_bindings
-    M._config.key_bindings = nil
-  end
-  ---@diagnostic enable: undefined-field, inject-field
-
-  -- `utils.tbl_access` walks the user config directly and would error on
-  -- non-table intermediate values like `file_history_panel = 0`, so check
-  -- the shape explicitly before reading the deprecated keys.
-  local user_log_options
-  if
-    type(user_config.file_history_panel) == "table"
-    and type(user_config.file_history_panel.log_options) == "table"
-  then
-    user_log_options = user_config.file_history_panel.log_options
-  end
-  if user_log_options then
-    local top_options = {
-      "single_file",
-      "multi_file",
-    }
-    for _, name in ipairs(top_options) do
-      if user_log_options[name] ~= nil then
-        utils.warn(
-          "Global config of 'file_panel.log_options' has been deprecated. See ':h diffview.changelog-271'."
-        )
-        break
-      end
-    end
-
-    local option_names = {
-      "max_count",
-      "follow",
-      "all",
-      "merges",
-      "no_merges",
-      "reverse",
-    }
-    for _, name in ipairs(option_names) do
-      if user_log_options[name] ~= nil then
-        utils.warn(
-          ("'file_history_panel.log_options.{%s}' has been deprecated. See ':h diffview.changelog-151'."):format(
-            fmt_enum(option_names, true)
-          )
-        )
-        break
-      end
-    end
-  end
-
-  --#endregion
 
   -- ============================================================================
   -- Validation
@@ -1736,10 +1684,6 @@ function M.setup(user_config)
   validate.table(c, "hooks", d.hooks)
   validate.table(c, "keymaps", d.keymaps)
   local user_keymaps = type(user_config.keymaps) == "table" and user_config.keymaps or {}
-  if user_keymaps.disable_defaults ~= nil then
-    utils.warn("'keymaps.disable_defaults' was removed; use keymaps.preset = 'none'.")
-    c.keymaps.preset = user_keymaps.disable_defaults and "none" or "minimal"
-  end
   validate.enum(c.keymaps, "preset", { "minimal", "none" }, d.keymaps.preset, {
     path = "keymaps.preset",
   })
@@ -1812,8 +1756,6 @@ function M.setup(user_config)
 
   setup_done = true
 end
-
-M.actions = actions
 
 -- Shared value validators. Used internally by `setup()` for the config schema,
 -- and re-exported for CLI arg parsing (e.g., `--rename-threshold`) so both

@@ -1,4 +1,4 @@
-local actions = require("diffview.actions")
+local actions = require("diffview.actions.builtins")
 local helpers = require("diffview.tests.helpers")
 local lib = require("diffview.lib")
 local utils = require("diffview.utils")

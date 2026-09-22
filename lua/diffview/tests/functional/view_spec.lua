@@ -1,3 +1,4 @@
+local ctx = require("diffview.runtime.context")
 local api = vim.api
 
 describe("diffview.scene.view", function()
@@ -9,12 +10,12 @@ describe("diffview.scene.view", function()
   local orig_emitter
 
   before_each(function()
-    orig_emitter = DiffviewGlobal.emitter
-    DiffviewGlobal.emitter = EventEmitter()
+    orig_emitter = ctx.emitter
+    ctx.emitter = EventEmitter()
   end)
 
   after_each(function()
-    DiffviewGlobal.emitter = orig_emitter
+    ctx.emitter = orig_emitter
   end)
 
   describe("View:close()", function()

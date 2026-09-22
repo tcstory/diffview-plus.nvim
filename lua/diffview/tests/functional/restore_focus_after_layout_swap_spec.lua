@@ -1,3 +1,4 @@
+local ctx = require("diffview.runtime.context")
 local async = require("diffview.async")
 local config = require("diffview.config")
 local helpers = require("diffview.tests.helpers")
@@ -49,13 +50,13 @@ describe("StandardView.use_entry layout-swap focus (integration)", function()
   local orig_emitter, original_config
 
   before_each(function()
-    orig_emitter = DiffviewGlobal.emitter
-    DiffviewGlobal.emitter = EventEmitter()
+    orig_emitter = ctx.emitter
+    ctx.emitter = EventEmitter()
     original_config = vim.deepcopy(config.get_config())
   end)
 
   after_each(function()
-    DiffviewGlobal.emitter = orig_emitter
+    ctx.emitter = orig_emitter
     config.setup(original_config)
   end)
 

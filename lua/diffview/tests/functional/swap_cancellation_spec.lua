@@ -1,3 +1,4 @@
+local ctx = require("diffview.runtime.context")
 local async = require("diffview.async")
 local config = require("diffview.config")
 local helpers = require("diffview.tests.helpers")
@@ -88,15 +89,15 @@ describe("StandardView layout-swap cancellation (integration)", function()
   local orig_emitter, original_config, orig_load_file
 
   before_each(function()
-    orig_emitter = DiffviewGlobal.emitter
-    DiffviewGlobal.emitter = EventEmitter()
+    orig_emitter = ctx.emitter
+    ctx.emitter = EventEmitter()
     original_config = vim.deepcopy(config.get_config())
     orig_load_file = Window.load_file
   end)
 
   after_each(function()
     Window.load_file = orig_load_file
-    DiffviewGlobal.emitter = orig_emitter
+    ctx.emitter = orig_emitter
     config.setup(original_config)
   end)
 

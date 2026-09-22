@@ -1,7 +1,7 @@
 ---Public ActionRegistry API.
 
--- Loading the compatibility facade registers every built-in action.
-require("diffview.actions")
+-- Register every built-in action before exposing the registry.
+require("diffview.actions.builtins")
 
 local registry = require("diffview.runtime.action_registry")
 

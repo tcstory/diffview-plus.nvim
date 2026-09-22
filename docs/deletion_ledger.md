@@ -51,12 +51,12 @@ deletion is expected.
 
 | Field | Value |
 |-------|-------|
-| **Status** | 🟡 In progress — wrapper created, adapter migration pending |
+| **Status** | ✅ Deleted |
 | **Files** | `lua/diffview/job.lua`, `lua/diffview/multi_job.lua`, `lua/diffview/job_utils.lua` |
 | **Reason** | Predates `vim.system()`.  The abstraction leaks libuv handles, has no unified cancellation, and requires per-call close guard.  `vim.system()` provides stdout/stderr streaming, stdin, timeout, kill, and exit-code in one call. |
-| **Replacement** | `lua/diffview/runtime/process.lua` (Phase 1 deliverable) |
+| **Replacement** | `lua/diffview/runtime/process_task.lua` and `process_group.lua`, backed by `vim.system()` |
 | **Phase** | 1 |
-| **Deleted in** | — (pending adapter migration) |
+| **Deleted in** | Phase 10 final-cleanup commit |
 
 ---
 
@@ -66,12 +66,12 @@ deletion is expected.
 
 | Field | Value |
 |-------|-------|
-| **Status** | ✅ Business logic fully migrated |
+| **Status** | ✅ Deleted |
 | **Files** | All 25 non-test modules — migrated to `require("diffview.runtime.context")` |
 | **Reason** | A single mutable global makes unit testing impossible without a real Neovim session, and couples all modules to the boot order. |
 | **Replacement** | `lua/diffview/runtime/context.lua` — module-level context with `logger`, `emitter`, `debug_level`, `state` |
 | **Phase** | 2 |
-| **Deleted in** | `_G.DiffviewGlobal` still constructed in `bootstrap.lua` for test isolation compatibility; full `_G` removal in Phase 2C |
+| **Deleted in** | Phase 10 final-cleanup commit; bootstrap state now lives in `runtime.context` |
 | **Commits** | `e798dc2` (Phase 2A), `37b7e29` (Phase 2B) |
 
 ### Arbitrary-string `EventEmitter`
@@ -104,12 +104,12 @@ deletion is expected.
 
 | Field | Value |
 |-------|-------|
-| **Status** | ✅ Split into domain declaration modules |
+| **Status** | ✅ Deleted after split into domain declaration modules |
 | **Files** | `lua/diffview/actions.lua` |
 | **Reason** | All actions in one file with no separation of concerns.  Splitting into domain modules (diff, history, merge, navigation, layout, file) makes each action's preconditions, side effects and tests self-contained. |
-| **Replacement** | `lua/diffview/actions/{diff,history,merge,navigation,layout,file,view}.lua`; `actions.lua` is a compatibility facade |
+| **Replacement** | `lua/diffview/actions/{diff,history,merge,navigation,layout,file,view}.lua`; `actions/builtins.lua` performs internal registration and the public surface is `diffview.api.actions` |
 | **Phase** | 3 |
-| **Deleted in** | commit `d9da23d` (Phase 3 completion) |
+| **Deleted in** | split in commit `d9da23d`; compatibility facade removed in Phase 10 final-cleanup commit |
 
 ---
 
@@ -201,12 +201,12 @@ deletion is expected.
 
 | Field | Value |
 |-------|-------|
-| **Status** | ✅ Production dependency removed; compatibility modules retained until Phase 10 |
+| **Status** | ✅ Deleted |
 | **Files** | `lua/diffview/scene/layouts/{diff_1_pinned,diff_1_inline_pinned,diff_2_hor_pinned,diff_2_ver_pinned}.lua` |
 | **Reason** | Encoding one view mode in four layout classes multiplied ownership and null-side rules across every orientation. |
 | **Replacement** | `FileHistoryStore.view` owns the mode and pinned files; ordinary layout instances receive borrowed-symbol state from `FileEntry`. |
 | **Phase** | 8 |
-| **Deleted in** | Phase 10 compatibility removal |
+| **Deleted in** | Phase 10 final-cleanup commit |
 
 ### Full component rebuild on streamed history batches
 
@@ -227,23 +227,23 @@ deletion is expected.
 
 | Field | Value |
 |-------|-------|
-| **Status** | 🔴 Scheduled |
+| **Status** | ⬜ Retained after live-caller audit |
 | **Files** | `lua/diffview/oop.lua`, all classes that call `ClassName:extend()` |
 | **Reason** | The OOP framework predates Neovim's `vim.iter`, LuaLS annotations and modern Lua idioms.  It adds a non-standard class mechanism that is invisible to LuaLS and confuses new contributors.  The refactor uses plain Lua tables and `---@class` annotations throughout. |
 | **Replacement** | Plain Lua modules with LuaLS `---@class` / `---@field` annotations |
-| **Phase** | 10 (after all classes have been replaced) |
-| **Deleted in** | — |
+| **Phase** | Post-refactor vertical slices; it is not compatibility code |
+| **Deleted in** | —; 82 live class declarations remain, so deletion would break scene/adapter dispatch |
 
 ### Self-built coroutine scheduler (`async.lua`, `Waitable`)
 
 | Field | Value |
 |-------|-------|
-| **Status** | 🔴 Scheduled |
+| **Status** | ⬜ Retained after live-caller audit |
 | **Files** | `lua/diffview/async.lua`, `lua/diffview/control.lua` |
 | **Reason** | The scheduler predates `vim.system()` and does not integrate with Neovim's own `vim.schedule`/`vim.defer_fn` boundary cleanly.  Cancellation and close-race are each caller's responsibility.  `EffectScope` + `vim.system` provide cleaner cancellation without a custom scheduler. |
-| **Replacement** | `lua/diffview/app/effect_scope.lua`; `vim.system()` for subprocess management |
-| **Phase** | 10 (blocked on all callers being migrated) |
-| **Deleted in** | — |
+| **Replacement** | `vim.system()` now owns subprocess management; a future lifecycle migration must replace coroutine callers before scheduler removal |
+| **Phase** | Post-refactor vertical slices; it is not compatibility code |
+| **Deleted in** | —; live view/query callers remain |
 
 ---
 

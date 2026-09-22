@@ -1,4 +1,4 @@
-local Job = require("diffview.job").Job
+local Job = require("diffview.runtime.process_task").ProcessTask
 local Panel = require("diffview.ui.panel").Panel
 local async = require("diffview.async")
 local get_user_config = require("diffview.config").get_config
@@ -108,7 +108,7 @@ CommitLogPanel.update = async.void(function(self, args, paths)
     args = { args }
   end
 
-  local job = Job({
+  local job = Job.new({
     command = self.adapter:bin(),
     args = self.adapter:get_log_args(args, paths),
     cwd = self.adapter.ctx.toplevel,

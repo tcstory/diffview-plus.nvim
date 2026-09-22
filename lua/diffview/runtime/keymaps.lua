@@ -4,6 +4,11 @@
 ---Neovim boundary, keeping the registry as the single source of labels,
 ---availability and execution behaviour.
 
+-- Config can be the first public module a setup call touches. Ensure built-in
+-- specs exist before resolving string IDs, without restoring the removed
+-- `diffview.actions` facade.
+require("diffview.actions.builtins")
+
 local registry = require("diffview.runtime.action_registry")
 
 local M = {}

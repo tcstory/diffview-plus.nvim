@@ -1,16 +1,12 @@
-local actions = require("diffview.actions")
+local actions = require("diffview.actions.builtins")
 local config = require("diffview.config")
 local helpers = require("diffview.tests.helpers")
 local utils = require("diffview.utils")
 
 local Diff1 = require("diffview.scene.layouts.diff_1").Diff1
 local Diff1Inline = require("diffview.scene.layouts.diff_1_inline").Diff1Inline
-local Diff1InlinePinned = require("diffview.scene.layouts.diff_1_inline_pinned").Diff1InlinePinned
-local Diff1Pinned = require("diffview.scene.layouts.diff_1_pinned").Diff1Pinned
 local Diff2Hor = require("diffview.scene.layouts.diff_2_hor").Diff2Hor
-local Diff2HorPinned = require("diffview.scene.layouts.diff_2_hor_pinned").Diff2HorPinned
 local Diff2Ver = require("diffview.scene.layouts.diff_2_ver").Diff2Ver
-local Diff2VerPinned = require("diffview.scene.layouts.diff_2_ver_pinned").Diff2VerPinned
 local Diff3Hor = require("diffview.scene.layouts.diff_3_hor").Diff3Hor
 local Diff3Ver = require("diffview.scene.layouts.diff_3_ver").Diff3Ver
 local Diff3Mixed = require("diffview.scene.layouts.diff_3_mixed").Diff3Mixed
@@ -603,18 +599,10 @@ describe("diffview.actions.cycle_layout with custom config", function()
   end)
 end)
 
--- Regression: when `pin_local` is on and the cycle list contains a Diff1
--- layout (e.g. `diff1_inline` auto-inserted by config validation when
--- `view.file_history.layout` is set to it), `cycle_layout` used to land
--- on that entry, `resolve_pinned_layout` would collapse it to the default
--- Diff2's pinned form, and if the cycle was already on that orientation
--- `convert_layout` was a no-op -- so the user saw cycling stop part-way
--- (e.g. Ver -> Hor -> stuck on Hor). `pinned_variant` now covers Diff1
--- and Diff1Inline (mapped to their pin_local-safe pinned siblings), so
--- the same set of layout NAMES is reachable whether `pin_local` is on or
--- off; in pin_local mode the active class is the `*_pinned` form, which
--- declares `shared_symbols = { "b" }` and keeps `FileEntry:destroy` from
--- tearing down the view-owned working-tree file.
+-- Regression: pin-local layout cycling must preserve the configured sequence,
+-- including Diff1 layouts. Standard layout instances carry their borrowed
+-- b-side ownership directly, so no class substitution may collapse two
+-- consecutive names into the same layout.
 describe("diffview.actions.cycle_layout pin_local cycling", function()
   local lib = require("diffview.lib")
 
@@ -662,8 +650,7 @@ describe("diffview.actions.cycle_layout pin_local cycling", function()
 
   -- Mock a FileHistoryView: stub `instanceof` so the action's dispatch
   -- picks the file-history branch, and inherit the helper methods from
-  -- the real class via `__index` so `unpinned_layout` and
-  -- `resolve_pinned_layout` reflect actual behaviour.
+  -- the real class via `__index` so layout resolution reflects actual behaviour.
   local function mock_file_history_view(files, cur_entry, pin_local)
     return setmetatable({
       pin_local = pin_local,

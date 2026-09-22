@@ -1,10 +1,8 @@
-local Diff1InlinePinned = require("diffview.scene.layouts.diff_1_inline_pinned").Diff1InlinePinned
-local Diff1Pinned = require("diffview.scene.layouts.diff_1_pinned").Diff1Pinned
+local Diff1Inline = require("diffview.scene.layouts.diff_1_inline").Diff1Inline
+local Diff1 = require("diffview.scene.layouts.diff_1").Diff1
 local Diff2 = require("diffview.scene.layouts.diff_2").Diff2
 local Diff2Hor = require("diffview.scene.layouts.diff_2_hor").Diff2Hor
 local Diff2Ver = require("diffview.scene.layouts.diff_2_ver").Diff2Ver
-local Diff2HorPinned = require("diffview.scene.layouts.diff_2_hor_pinned").Diff2HorPinned
-local Diff2VerPinned = require("diffview.scene.layouts.diff_2_ver_pinned").Diff2VerPinned
 local FileEntry = require("diffview.scene.file_entry").FileEntry
 local FileHistoryView =
   require("diffview.scene.views.file_history.file_history_view").FileHistoryView
@@ -200,7 +198,7 @@ describe("FileHistoryView:_resolve_pinned_target", function()
       -- table to exist so the inherited method can write into it.
       _pinned_b_files = {},
       get_default_layout = function()
-        return Diff2HorPinned
+        return Diff2Hor
       end,
     }, { __index = FileHistoryView })
   end
@@ -213,7 +211,7 @@ describe("FileHistoryView:_resolve_pinned_target", function()
     for _, p in ipairs(paths) do
       table.insert(
         files,
-        FileEntry.with_layout(Diff2HorPinned, {
+        FileEntry.with_layout(Diff2Hor, {
           adapter = adapter,
           path = p,
           status = "M",
@@ -430,17 +428,17 @@ describe("FileHistoryView:_resolve_pinned_target", function()
       local entry = stub_log_entry(adapter, { "foo.txt", "bar.txt" })
 
       -- First call builds the overlay with the stub's default
-      -- (`Diff2HorPinned` from `stub_view.get_default_layout`).
+      -- (`Diff2Hor` from `stub_view.get_default_layout`).
       local first = view:_resolve_pinned_target(entry)
       assert.is_not_nil(first)
-      eq(Diff2HorPinned, first.layout.class)
+      eq(Diff2Hor, first.layout.class)
 
       -- Simulate a cycle to the vertical pinned variant.
-      view.cur_layout = { class = Diff2VerPinned }
+      view.cur_layout = { class = Diff2Ver }
 
       local second = view:_resolve_pinned_target(entry)
       eq(first, second) -- same instance, just relayouted
-      eq(Diff2VerPinned, second.layout.class)
+      eq(Diff2Ver, second.layout.class)
     end)
 
     pcall(vim.fn.delete, repo, "rf")
@@ -655,15 +653,6 @@ describe("FileHistoryView pinned-local layout selection (sanity)", function()
     eq("diff2_vertical", inst(nil):get_default_layout().name)
   end)
 
-  -- Defensive path: if a pinned layout name reaches `get_default_layout`
-  -- with `pin_local` unset, it must be downgraded to its unpinned sibling.
-  -- Pinned classes assume `revs.a` is the commit (the way pin_local sets
-  -- it); applied to a parent-vs-commit history they mis-classify status
-  -- "A"/"?" and the adapter then fails to `show <rev>:<missing>`. The
-  -- user-config path is already gated by `standard_layouts` validation
-  -- (pinned names aren't in the schema's allow-list, so `config.setup`
-  -- silently substitutes the default), so we stub `get_default_layout_name`
-  -- here to exercise the downgrade directly without going through config.
   local function stub_named(layout_name, pin_local)
     return setmetatable({
       pin_local = pin_local,
@@ -673,129 +662,14 @@ describe("FileHistoryView pinned-local layout selection (sanity)", function()
     }, { __index = FileHistoryView })
   end
 
-  it("downgrades a pinned layout name when pin_local is unset", function()
-    eq("diff2_horizontal", stub_named("diff2_horizontal_pinned", nil):get_default_layout().name)
-    eq("diff2_vertical", stub_named("diff2_vertical_pinned", nil):get_default_layout().name)
-  end)
-
   it("keeps Diff1 layout selection independent from pin-local mode", function()
     eq("diff1_inline", stub_named("diff1_inline", true):get_default_layout().name)
     eq("diff1_plain", stub_named("diff1_plain", true):get_default_layout().name)
   end)
-
-  -- Defensive path mirroring the Diff2 downgrade: if a pinned Diff1 name
-  -- reaches `get_default_layout` with `pin_local` unset, it must be
-  -- downgraded to its unpinned sibling. Pinned variants borrow the b-side
-  -- from the view, which only owns one when `pin_local` is live.
-  it("downgrades a pinned Diff1 name when pin_local is unset", function()
-    eq("diff1_inline", stub_named("diff1_inline_pinned", nil):get_default_layout().name)
-    eq("diff1_plain", stub_named("diff1_plain_pinned", nil):get_default_layout().name)
-  end)
 end)
 
 -- Regression: layout-cycle (`g<C-x>`) and `set_layout` go through
--- `entry:convert_layout(target)`. Without `resolve_pinned_layout` they
--- would route a pin_local view's entries to unpinned `Diff2Hor`/`Diff2Ver`,
--- whose `shared_symbols` is empty -- so the next `FileEntry:destroy`
--- would tear down the view-owned working-tree File once per entry,
--- breaking the pin and wiping shared diffview state from the user's
--- working-tree buffers.
-describe("FileHistoryView:resolve_pinned_layout", function()
-  local Diff1 = require("diffview.scene.layouts.diff_1").Diff1
-  local Diff1Inline = require("diffview.scene.layouts.diff_1_inline").Diff1Inline
-  local Diff2Hor = require("diffview.scene.layouts.diff_2_hor").Diff2Hor
-  local Diff2Ver = require("diffview.scene.layouts.diff_2_ver").Diff2Ver
-  local Diff3Hor = require("diffview.scene.layouts.diff_3_hor").Diff3Hor
-  local Diff3Ver = require("diffview.scene.layouts.diff_3_ver").Diff3Ver
-  local Diff3Mixed = require("diffview.scene.layouts.diff_3_mixed").Diff3Mixed
-  local Diff4Mixed = require("diffview.scene.layouts.diff_4_mixed").Diff4Mixed
-
-  local function inst(pin_local)
-    return setmetatable({ pin_local = pin_local }, { __index = FileHistoryView })
-  end
-
-  it("returns the input class unchanged when pin_local is off", function()
-    eq(Diff2Hor, inst(false):resolve_pinned_layout(Diff2Hor))
-    eq(Diff2Ver, inst(false):resolve_pinned_layout(Diff2Ver))
-    eq(Diff1Inline, inst(false):resolve_pinned_layout(Diff1Inline))
-  end)
-
-  it("keeps standard Diff2 classes in pin-local mode", function()
-    eq(Diff2Hor, inst(true):resolve_pinned_layout(Diff2Hor))
-    eq(Diff2Ver, inst(true):resolve_pinned_layout(Diff2Ver))
-  end)
-
-  it("normalizes legacy pinned Diff2 classes", function()
-    eq(Diff2Hor, inst(true):resolve_pinned_layout(Diff2HorPinned))
-    eq(Diff2Ver, inst(true):resolve_pinned_layout(Diff2VerPinned))
-  end)
-
-  -- Diff1 variants gain pinned siblings too so `cycle_layout` /
-  -- `set_layout` can route to them without `FileEntry:destroy` tearing
-  -- down the view-owned working-tree file. `Diff1*Pinned` declare
-  -- `shared_symbols = { "b" }`, mirroring `Diff2*Pinned`.
-  it("keeps standard Diff1 classes in pin-local mode", function()
-    eq(Diff1, inst(true):resolve_pinned_layout(Diff1))
-    eq(Diff1Inline, inst(true):resolve_pinned_layout(Diff1Inline))
-  end)
-
-  it("normalizes legacy pinned Diff1 classes", function()
-    eq(Diff1, inst(true):resolve_pinned_layout(Diff1Pinned))
-    eq(Diff1Inline, inst(true):resolve_pinned_layout(Diff1InlinePinned))
-  end)
-
-  -- `actions.set_layout("diff3_horizontal")` and user-supplied
-  -- `view.cycle_layouts.default` entries can reach `resolve_pinned_layout`
-  -- with merge-only layouts. Those have no pinned sibling, so they would
-  -- otherwise drop a pin_local FileHistoryView into an unpinned class
-  -- whose `shared_symbols` is empty, letting `FileEntry:destroy` tear
-  -- down the view-owned working-tree file. Falling back to the default
-  -- Diff2's pinned form preserves the shared-b contract. The exact
-  -- orientation depends on `prefer_horizontal()`, so we only assert
-  -- that the result is one of the pinned Diff2 variants.
-  it("falls back to a standard Diff2 for non-history layouts in pin_local", function()
-    local standard_diff2 = {
-      [Diff2Hor] = true,
-      [Diff2Ver] = true,
-    }
-    for _, cls in ipairs({ Diff3Hor, Diff3Ver, Diff3Mixed, Diff4Mixed }) do
-      local resolved = inst(true):resolve_pinned_layout(cls)
-      assert.is_true(
-        standard_diff2[resolved],
-        "expected standard Diff2, got " .. tostring(resolved and resolved.name)
-      )
-    end
-  end)
-end)
-
--- `unpinned_layout` is the inverse mapping `cycle_layout` consults to
--- find the active layout's position in the unpinned cycle list. Without
--- it, a pin_local view's `Diff2*Pinned` class would never match the
--- `{ Diff2Hor, Diff2Ver }` cycle and the action would loop forever on
--- the first orientation. The function is a no-op for any class that
--- isn't a known pinned variant, so non-pin_local views keep their
--- existing behaviour.
-describe("FileHistoryView:unpinned_layout", function()
-  local Diff1 = require("diffview.scene.layouts.diff_1").Diff1
-  local Diff1Inline = require("diffview.scene.layouts.diff_1_inline").Diff1Inline
-  local Diff2Hor = require("diffview.scene.layouts.diff_2_hor").Diff2Hor
-  local Diff2Ver = require("diffview.scene.layouts.diff_2_ver").Diff2Ver
-
-  local view = setmetatable({}, { __index = FileHistoryView })
-
-  it("maps pinned variants back to their unpinned siblings", function()
-    eq(Diff1, view:unpinned_layout(Diff1Pinned))
-    eq(Diff1Inline, view:unpinned_layout(Diff1InlinePinned))
-    eq(Diff2Hor, view:unpinned_layout(Diff2HorPinned))
-    eq(Diff2Ver, view:unpinned_layout(Diff2VerPinned))
-  end)
-
-  it("returns non-pinned classes unchanged", function()
-    eq(Diff2Hor, view:unpinned_layout(Diff2Hor))
-    eq(Diff2Ver, view:unpinned_layout(Diff2Ver))
-    eq(Diff1Inline, view:unpinned_layout(Diff1Inline))
-  end)
-end)
+-- Pin-local layout selection is covered by ordinary layout instance tests.
 
 -- `pick_entry_target` is the helper that listeners and the panel use to
 -- decide which FileEntry to display when navigating to a LogEntry. In

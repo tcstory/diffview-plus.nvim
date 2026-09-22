@@ -1,3 +1,4 @@
+local ctx = require("diffview.runtime.context")
 local helpers = require("diffview.tests.helpers")
 
 local eq = helpers.eq
@@ -136,9 +137,9 @@ describe("diffview.selection_store", function()
       end
 
       local warns = {}
-      local orig_warn = DiffviewGlobal.logger.warn
+      local orig_warn = ctx.logger.warn
       local orig_rename = vim.uv.fs_rename
-      DiffviewGlobal.logger.warn = function(_, msg)
+      ctx.logger.warn = function(_, msg)
         table.insert(warns, msg)
       end
       vim.uv.fs_rename = function()
@@ -147,7 +148,7 @@ describe("diffview.selection_store", function()
 
       SelectionStore.save("scope:", { "a.lua" })
 
-      DiffviewGlobal.logger.warn = orig_warn
+      ctx.logger.warn = orig_warn
       vim.uv.fs_rename = orig_rename
 
       -- The rename failure should be caught and logged with the rename error.

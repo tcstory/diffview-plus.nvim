@@ -713,8 +713,8 @@ end
 ---Diff1Inline owns `a_file` even though it isn't attached to a window, so
 ---expose it through `owned_files()` so `FileEntry:destroy()` can tear it
 ---down alongside the windowed files. Defer to `Layout:owned_files` for the
----windowed slots so `shared_symbols` (e.g. `Diff1InlinePinned`'s borrowed
----b-side) is honoured in subclasses.
+---windowed slots so an instance's borrowed `shared_symbols` (for example the
+---FileHistory pin-local b-side) are honoured.
 ---@return vcs.File[]
 function Diff1Inline:owned_files()
   local out = Layout.owned_files(self)

@@ -1,3 +1,4 @@
+local ctx = require("diffview.runtime.context")
 -- Regression coverage for the asynchronous open path. Phase 5 removes
 -- domain-specific `<Nop>` guards from the shared placeholder; registered
 -- actions are gated centrally by ViewShell until the view reports ready.
@@ -73,14 +74,14 @@ describe("DiffView:open (issue #262 / #289)", function()
   local orig_emitter, original_config
 
   before_each(function()
-    orig_emitter = DiffviewGlobal.emitter
-    DiffviewGlobal.emitter = EventEmitter()
+    orig_emitter = ctx.emitter
+    ctx.emitter = EventEmitter()
     original_config = vim.deepcopy(config.get_config())
     config.get_config().use_icons = false
   end)
 
   after_each(function()
-    DiffviewGlobal.emitter = orig_emitter
+    ctx.emitter = orig_emitter
     config.setup(original_config)
   end)
 

@@ -4,8 +4,8 @@ local Diff2Hor = require("diffview.scene.layouts.diff_2_hor").Diff2Hor
 local FileEntry = require("diffview.scene.file_entry").FileEntry
 local FlagOption = require("diffview.vcs.flag_option").FlagOption
 local HgRev = require("diffview.vcs.adapters.hg.rev").HgRev
-local Job = require("diffview.job").Job
-local MultiJob = require("diffview.multi_job").MultiJob
+local Job = require("diffview.runtime.process_task").ProcessTask
+local MultiJob = require("diffview.runtime.process_group").ProcessGroup
 local JobStatus = require("diffview.vcs.utils").JobStatus
 local LogEntry = require("diffview.vcs.log_entry").LogEntry
 local RevType = require("diffview.vcs.rev").RevType
@@ -421,9 +421,9 @@ end
 function HgAdapter:stream_fh_data(state)
   ---@type AsyncListStream
   local stream
-  ---@type diffview.Job
+  ---@type diffview.ProcessTask
   local namestat_job, numstat_job
-  ---@type MultiJob
+  ---@type diffview.ProcessGroup
   local mjob
 
   local raw = {}
@@ -499,7 +499,7 @@ function HgAdapter:stream_fh_data(state)
     or nil
   local log_opt = { label = "HgAdapter:incremental_fh_data()" }
 
-  namestat_job = Job({
+  namestat_job = Job.new({
     command = self:bin(),
     args = utils.vec_join(
       self:args(),
@@ -522,7 +522,7 @@ function HgAdapter:stream_fh_data(state)
     on_stdout = on_stdout,
   })
 
-  numstat_job = Job({
+  numstat_job = Job.new({
     command = self:bin(),
     args = utils.vec_join(
       self:args(),
@@ -539,7 +539,7 @@ function HgAdapter:stream_fh_data(state)
     on_stdout = on_stdout,
   })
 
-  mjob = MultiJob(
+  mjob = MultiJob.new(
     { namestat_job, numstat_job },
     { on_exit = utils.hard_bind(stream.close, stream) }
   )
@@ -671,7 +671,7 @@ HgAdapter.file_history_worker = async.void(function(self, out_stream, opt)
       new_data.merge_hash and new_data.numstat[1]
       or (#new_data.numstat - 1) ~= #new_data.namestat
     then
-      local job = Job({
+      local job = Job.new({
         command = self:bin(),
         args = utils.vec_join(
           self:args(),
@@ -1236,7 +1236,7 @@ HgAdapter.tracked_files = async.wrap(function(self, left, right, args, kind, opt
   local conflicts = {}
   local log_opt = { label = "HgAdapter:tracked_files()" }
 
-  local namestat_job = Job({
+  local namestat_job = Job.new({
     command = self:bin(),
     args = utils.vec_join(
       self:args(),
@@ -1252,7 +1252,7 @@ HgAdapter.tracked_files = async.wrap(function(self, left, right, args, kind, opt
     retry = 2,
     log_opt = log_opt,
   })
-  local mergestate_job = Job({
+  local mergestate_job = Job.new({
     command = self:bin(),
     args = utils.vec_join(self:args(), "debugmergestate", "-Tjson"),
     cwd = self.ctx.toplevel,
@@ -1373,7 +1373,7 @@ HgAdapter.tracked_files = async.wrap(function(self, left, right, args, kind, opt
 end)
 
 HgAdapter.untracked_files = async.wrap(function(self, left, right, opt, callback)
-  local job = Job({
+  local job = Job.new({
     command = self:bin(),
     args = utils.vec_join(
       self:args(),
@@ -1426,7 +1426,7 @@ HgAdapter.show = async.wrap(function(self, path, rev, callback)
   end
 
   local job
-  job = Job({
+  job = Job.new({
     command = self:bin(),
     args = self:get_show_args(path, rev),
     cwd = self.ctx.toplevel,

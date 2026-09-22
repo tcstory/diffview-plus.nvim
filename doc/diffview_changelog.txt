@@ -5,6 +5,26 @@ CHANGELOG
 
 NOTE: Breaking changes and notable feature additions are listed here.
 
+                                                *diffview.changelog-minimal-ui*
+
+The UI architecture now ships only the `minimal` and `none` keymap presets.
+Panel and toolbar interactions dispatch stable action IDs; use `?` to discover
+the actions available for the current view. See |diffview-config-keymaps|.
+
+BREAKING: `key_bindings`, `keymaps.disable_defaults`, panel-local `use_icons`,
+direct panel `position`/`width`/`height`, and legacy FileHistory log options
+have been removed. `diffview.config.diffview_callback()` has also been removed.
+Each rejected entry includes its replacement; see `docs/migration-v2.md`.
+
+BREAKING (internal): `_G.DiffviewGlobal`, `diffview.job`,
+`diffview.multi_job`, `diffview.job_utils`, and the four `*_pinned` layout
+modules have been removed. Process execution uses `vim.system()` and pin-local
+ownership now lives on standard layout instances.
+
+`:checkhealth diffview` now reports the Neovim 0.12 API baseline, UI preset,
+interaction mode, deprecated-config policy, adapter selection, and adapter
+capabilities.
+
                                                 *diffview.changelog-session-restoration*
 
 Open `:DiffviewOpen` and `:DiffviewFileHistory` views now survive a

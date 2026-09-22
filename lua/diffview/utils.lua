@@ -1,7 +1,7 @@
 local lazy = require("diffview.lazy")
 
-local Job = lazy.access("diffview.job", "Job") ---@type diffview.Job|LazyModule
-local logger = lazy.access(_G, { "DiffviewGlobal", "logger" }) --[[@as Logger ]]
+local Job = lazy.access("diffview.runtime.process_task", "ProcessTask") ---@type diffview.ProcessTask|LazyModule
+local logger = lazy.access("diffview.runtime.context", "logger") --[[@as Logger ]]
 
 local api = vim.api
 
@@ -333,7 +333,7 @@ function M.job(cmd, cwd_or_opt)
     opt = cwd_or_opt or {}
   end
 
-  local job = Job({
+  local job = Job.new({
     command = cmd[1],
     args = M.vec_slice(cmd, 2),
     cwd = opt.cwd,

@@ -1051,27 +1051,14 @@ function M.cycle_layout()
 
   for _, entry in ipairs(files) do
     local cur_layout = entry.layout
-    -- Normalise a pinned current class to its unpinned sibling for the
-    -- lookup: the cycle list contains unpinned classes, so without this
-    -- step pin_local mode never matches and cycling sticks on the first
-    -- layout. `unpinned_layout` is a no-op for non-pinned classes.
     local cur_for_lookup = cur_layout.class --[[@as Layout ]]
-    if view.unpinned_layout then
-      cur_for_lookup = (view --[[@as FileHistoryView ]]):unpinned_layout(cur_for_lookup)
-    end
     local idx = utils.vec_indexof(layouts, cur_for_lookup)
     -- If the current layout isn't in the cycle list, start at the first
     -- entry rather than the last (Lua's `-1 % N + 1 == N` quirk).
     local next_idx = (idx == -1 and 0 or idx) % #layouts + 1
     local target = layouts[next_idx]
-    -- File-history pin_local must stay on a pinned Diff2 variant: an
-    -- unpinned class would let `FileEntry:destroy` tear down the
-    -- view-owned working-tree File once per entry and break the shared
-    -- LOCAL buffer. `resolve_pinned_layout` is a no-op when pin_local
-    -- is off, so the cast is safe even when the view happens to be a
-    -- DiffView in some refactor down the line.
-    if view.resolve_pinned_layout then
-      target = (view --[[@as FileHistoryView ]]):resolve_pinned_layout(target)
+    if view.resolve_history_layout then
+      target = (view --[[@as FileHistoryView ]]):resolve_history_layout(target)
     end
     entry:convert_layout(target)
   end
@@ -1083,14 +1070,11 @@ function M.cycle_layout()
   -- Convert it explicitly with the same target the loop computed.
   if cur_file and utils.vec_indexof(files, cur_file) == -1 then
     local cur_for_lookup = cur_file.layout.class --[[@as Layout ]]
-    if view.unpinned_layout then
-      cur_for_lookup = (view --[[@as FileHistoryView ]]):unpinned_layout(cur_for_lookup)
-    end
     local idx = utils.vec_indexof(layouts, cur_for_lookup)
     local next_idx = (idx == -1 and 0 or idx) % #layouts + 1
     local target = layouts[next_idx]
-    if view.resolve_pinned_layout then
-      target = (view --[[@as FileHistoryView ]]):resolve_pinned_layout(target)
+    if view.resolve_history_layout then
+      target = (view --[[@as FileHistoryView ]]):resolve_history_layout(target)
     end
     cur_file:convert_layout(target)
   end
@@ -1158,9 +1142,8 @@ function M.set_layout(layout_name)
     end
 
     local target_layout = layout_class.__get()
-    -- See `cycle_layout` for the pin_local rationale.
-    if view.resolve_pinned_layout then
-      target_layout = (view --[[@as FileHistoryView ]]):resolve_pinned_layout(target_layout)
+    if view.resolve_history_layout then
+      target_layout = (view --[[@as FileHistoryView ]]):resolve_history_layout(target_layout)
     end
 
     for _, entry in ipairs(files) do

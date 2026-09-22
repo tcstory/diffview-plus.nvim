@@ -37,10 +37,10 @@ end, { desc = 'Diff against main/master' })
 
 ## Restoring Files
 
-If the right side of the diff is showing the local state of a file, you can
-restore the file to the state from the left side of the diff (key binding `X`
-from the file panel by default). The current state of the file is stored in the
-git object database, and a command is echoed that shows how to undo the change.
+If the right side of the diff is showing the local state of a file, choose
+**Restore entry** from the file-panel action palette. The current state of the
+file is stored in the git object database, and a command is echoed that shows
+how to undo the change. To add a shortcut, map `file.restore_entry`.
 
 ## Hooks
 
@@ -115,8 +115,9 @@ Open with a symmetric range to see only the changes introduced by the branch:
 <details>
 <summary><b>PR Review Progress Tracking</b></summary>
 
-Use file selections (`<Space>` key) to track which files you've reviewed.
-Selected files show a `■` indicator; directories show `■` when all
+Use **Toggle selection** in the file-panel palette (action ID
+`diff.toggle_select_entry`) to track which files you've reviewed. Selected
+files show a `■` indicator; directories show `■` when all
 files are selected or `▣` when some are.
 
 To persist your progress across Neovim restarts, enable

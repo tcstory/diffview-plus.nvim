@@ -1,3 +1,4 @@
+local ctx = require("diffview.runtime.context")
 local helpers = require("diffview.tests.helpers")
 
 local eq = helpers.eq
@@ -103,7 +104,7 @@ describe("diffview.events", function()
     -- before_each/after_each ensures restoration even if assertions fail.
     --
     -- Phase 2 note: view.lua now uses ctx.emitter (from runtime/context)
-    -- rather than DiffviewGlobal.emitter directly.  We must swap the
+    -- rather than ctx.emitter directly.  We must swap the
     -- ctx.emitter field so the mock is visible to view.lua's code.
     local ctx = require("diffview.runtime.context")
     local orig_emitter
@@ -112,14 +113,14 @@ describe("diffview.events", function()
       orig_emitter = ctx.emitter
       local fresh = EventEmitter()
       -- Keep both access paths in sync so test assertions on
-      -- DiffviewGlobal.emitter and view.lua's ctx.emitter see the same object.
+      -- ctx.emitter and view.lua's ctx.emitter see the same object.
       ctx.emitter = fresh
-      DiffviewGlobal.emitter = fresh
+      ctx.emitter = fresh
     end)
 
     after_each(function()
       ctx.emitter = orig_emitter
-      DiffviewGlobal.emitter = orig_emitter
+      ctx.emitter = orig_emitter
     end)
 
     it("does not accumulate global emitter listeners after repeated init/close", function()
@@ -128,7 +129,7 @@ describe("diffview.events", function()
         view:close()
       end
 
-      eq(0, #(DiffviewGlobal.emitter:get("view_closed") or {}))
+      eq(0, #(ctx.emitter:get("view_closed") or {}))
     end)
 
     -- Exercises the close path when local listeners are registered on the
@@ -162,7 +163,7 @@ describe("diffview.events", function()
     -- view_closed is emitted during close.
     it("does not crash when global emitter has on_any listener during close", function()
       local any_events = {}
-      DiffviewGlobal.emitter:on_any(function(e, args)
+      ctx.emitter:on_any(function(e, args)
         table.insert(any_events, e.id)
       end)
 
@@ -176,7 +177,7 @@ describe("diffview.events", function()
       )
 
       -- No listeners should remain on the global emitter.
-      eq(0, #(DiffviewGlobal.emitter:get("view_closed") or {}))
+      eq(0, #(ctx.emitter:get("view_closed") or {}))
     end)
 
     -- Verifies that a listener emitting another event during close does
@@ -210,23 +211,23 @@ describe("diffview.events", function()
       local view_b = View({ default_layout = {} })
 
       -- Both views should have registered a view_closed wrapper.
-      eq(2, #(DiffviewGlobal.emitter:get("view_closed") or {}))
+      eq(2, #(ctx.emitter:get("view_closed") or {}))
 
       view_a:close()
 
       -- Only view_a's wrapper should have been removed.
-      eq(1, #(DiffviewGlobal.emitter:get("view_closed") or {}))
+      eq(1, #(ctx.emitter:get("view_closed") or {}))
 
       -- View B's wrapper should still work.
       local forwarded = false
       view_b.emitter:on("view_closed", function()
         forwarded = true
       end)
-      DiffviewGlobal.emitter:emit("view_closed", view_b)
+      ctx.emitter:emit("view_closed", view_b)
       eq(true, forwarded)
 
       view_b:close()
-      eq(0, #(DiffviewGlobal.emitter:get("view_closed") or {}))
+      eq(0, #(ctx.emitter:get("view_closed") or {}))
     end)
   end)
 

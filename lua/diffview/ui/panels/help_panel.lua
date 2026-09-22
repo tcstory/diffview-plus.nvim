@@ -1,5 +1,5 @@
 local Panel = require("diffview.ui.panel").Panel
-local actions = require("diffview.actions")
+local actions = require("diffview.actions.builtins")
 local registry = require("diffview.runtime.action_registry")
 local get_user_config = require("diffview.config").get_config
 local oop = require("diffview.oop")

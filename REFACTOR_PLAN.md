@@ -523,14 +523,16 @@ require("diffview").setup({
 
 ### Phase 10：删除收尾与文档固化
 
-- [ ] 发布只包含 minimal/none preset 的新架构版本。
+- [x] 发布面只包含 minimal/none preset（实际版本发布由维护者执行）。
 - [ ] 删除旧 OOP/async/job/renderer/config compatibility code，不为兼容周期延期。
-- [ ] 为被删除的 config/API/keymap 提供简洁迁移文档和明确错误信息。
-- [ ] 更新 README、help、recipes、截图和 UI walkthrough。
-- [ ] 增加“从入口到一次 action”架构导览，以及 DiffView/FileHistory/MergeView 三条端到端数据流说明。
-- [ ] 汇总各 Phase developer note，使读者能够从最小模块逐步学习 Store、EffectScope、Renderer、Router 和 adapter port。
-- [ ] 更新 `:checkhealth diffview`，输出 API baseline、adapter、UI preset 和 deprecated usage。
-- [ ] 删除无调用模块、全局函数和过时 workaround。
+  - 已删除 Job/MultiJob、config/action facade、pin-local layout compatibility；
+    OOP/async/scene renderer 经调用审计仍是活跃 core，不能作为死代码删除。
+- [x] 为被删除的 config/API/keymap 提供简洁迁移文档和明确错误信息。
+- [ ] 更新 README、help、recipes、截图和 UI walkthrough（文字与 walkthrough 已更新；新 UI 截图待补）。
+- [x] 增加“从入口到一次 action”架构导览，以及 DiffView/FileHistory/MergeView 三条端到端数据流说明。
+- [ ] 汇总各 Phase developer note，使读者能够从最小模块逐步学习 Store、EffectScope、Renderer、Router 和 adapter port（导览已完成；计划中的 EffectScope 模块尚不存在）。
+- [x] 更新 `:checkhealth diffview`，输出 API baseline、adapter、UI preset 和 deprecated usage。
+- [ ] 删除无调用模块、全局函数和过时 workaround（已删除本轮确认无调用的兼容模块；活跃 core 见 deletion ledger）。
 
 验收：生产代码不再引用旧 core，仓库不存在无期限 compat 层；文档中的每个按钮/命令均有测试或截图；所有删除项有 changelog。
 

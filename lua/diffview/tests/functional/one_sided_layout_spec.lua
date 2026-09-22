@@ -134,18 +134,18 @@ describe("view.one_sided_layout", function()
 
     it("leaves pinned_b_file entries on the pin-aware Diff2 layout", function()
       config.setup({ view = { one_sided_layout = "raw" } })
-      local Diff2HorPinned = require("diffview.scene.layouts.diff_2_hor_pinned").Diff2HorPinned
+      local Diff2Hor = require("diffview.scene.layouts.diff_2_hor").Diff2Hor
       local rev_b = local_rev()
       local shared = {
         path = "foo.txt",
         absolute_path = vim.fn.tempname() .. "-missing",
       } --[[@as vcs.File ]]
       local entry = make_entry("D", {
-        layout_class = Diff2HorPinned,
+        layout_class = Diff2Hor,
         revs = { a = commit_rev(), b = rev_b },
         pinned_b_file = shared,
       })
-      assert.equals(Diff2HorPinned, entry.layout.class)
+      assert.equals(Diff2Hor, entry.layout.class)
     end)
   end)
 

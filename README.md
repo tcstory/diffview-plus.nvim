@@ -59,6 +59,23 @@ Plug 'dlyongemallo/diffview-plus.nvim'
 Press `?` in a file/history panel to open the context-sensitive action palette.
 Diff buffers intentionally keep Neovim's native motions and diff commands.
 
+### UI walkthrough
+
+1. Open `:DiffviewOpen` and select a file by clicking its row or pressing
+   `<CR>` in keyboard mode.
+2. Use the panel toolbar for Actions, review marking, path filtering,
+   stage/unstage, restore, refresh, and layout selection. Disabled actions show
+   why the current adapter or selection cannot run them.
+3. In `:DiffviewFileHistory`, use Filters to change the query, Cancel while it
+   streams, and Details / Copy hash / Diff HEAD / Restore for the selected
+   commit.
+4. In `:DiffviewMergeOpen`, choose conflict results from the clickable conflict
+   row or action bar, move with Previous/Next, then select Apply Changes.
+
+The `minimal` preset exposes activation, closing, mouse routing, and the action
+palette; it does not install the old large mapping set. Use `interaction =
+"mouse"`, `"hybrid"`, or `"keyboard"` to choose how panel controls activate.
+
 See [USAGE.md](USAGE.md) for detailed guides on PR review, stash inspection,
 and committing workflows.
 
@@ -212,6 +229,8 @@ guide, LSP diagnostics in diffs, platform notes, and plugin compatibility.
 | [USAGE.md](USAGE.md) | PR review, stash inspection, committing guides |
 | [RECIPES.md](RECIPES.md) | Configuration snippets and recommended keymaps |
 | [TIPS.md](TIPS.md) | Tips, FAQ, and known compatibility issues |
+| [docs/migration-v2.md](docs/migration-v2.md) | Breaking-change migration guide |
+| [docs/architecture.md](docs/architecture.md) | Entry-to-action and view data flows |
 | `:h diffview` | Full plugin documentation |
 | `:h diffview.defaults` | Complete default configuration |
 

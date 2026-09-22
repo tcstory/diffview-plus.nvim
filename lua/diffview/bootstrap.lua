@@ -1,16 +1,15 @@
-if DiffviewGlobal and DiffviewGlobal.bootstrap_done then
-  return DiffviewGlobal.bootstrap_ok
-end
-
 local lazy = require("diffview.lazy")
+local ctx = require("diffview.runtime.context")
+
+if ctx.bootstrap_done then
+  return ctx.bootstrap_ok
+end
 
 local EventEmitter = lazy.access("diffview.events", "EventEmitter") ---@type EventEmitter|LazyModule
 local Logger = lazy.access("diffview.logger", "Logger") ---@type Logger|LazyModule
 local config = lazy.require("diffview.config") ---@module "diffview.config"
 local diffview = lazy.require("diffview") ---@module "diffview"
 local utils = lazy.require("diffview.utils") ---@module "diffview.utils"
-
-local uv = vim.uv
 
 local function err(msg)
   msg = msg:gsub("'", "''")
@@ -19,46 +18,30 @@ local function err(msg)
   vim.cmd("echohl NONE")
 end
 
-_G.DiffviewGlobal = {
-  bootstrap_done = true,
-  bootstrap_ok = false,
-}
+ctx.bootstrap_done = true
+ctx.bootstrap_ok = false
 
 if vim.fn.has("nvim-0.12") ~= 1 then
   err("Minimum required version is Neovim 0.12.0! Cannot continue.")
   return false
 end
 
-_G.DiffviewGlobal = {
-  ---Debug Levels:
-  ---0:     NOTHING
-  ---1:     NORMAL
-  ---5:     LOADING
-  ---10:    RENDERING & ASYNC
-  ---@diagnostic disable-next-line: missing-parameter
-  debug_level = tonumber((uv.os_getenv("DEBUG_DIFFVIEW"))) or 0,
-  state = {},
-  bootstrap_done = true,
-  bootstrap_ok = true,
-}
+local logger = Logger()
+local emitter = EventEmitter()
+local state = {}
+local debug_level = tonumber(vim.env.DEBUG_DIFFVIEW) or 0
 
-DiffviewGlobal.logger = Logger()
-DiffviewGlobal.emitter = EventEmitter()
-
-DiffviewGlobal.emitter:on_any(function(e, args)
+emitter:on_any(function(e, args)
   diffview.nore_emit(e.id, utils.tbl_unpack(args))
   config.user_emitter:nore_emit(e.id, utils.tbl_unpack(args))
 end)
 
--- Phase 2: also initialise the module-level context so new code can use
--- `require("diffview.runtime.context").logger` instead of the _G global.
--- Both access paths are equivalent during the transition; the _G.DiffviewGlobal
--- global will be removed once all call sites have been migrated.
-require("diffview.runtime.context").init({
-  logger = DiffviewGlobal.logger,
-  emitter = DiffviewGlobal.emitter,
-  debug_level = DiffviewGlobal.debug_level,
-  state = DiffviewGlobal.state,
+ctx.init({
+  logger = logger,
+  emitter = emitter,
+  debug_level = debug_level,
+  state = state,
 })
+ctx.bootstrap_ok = true
 
 return true

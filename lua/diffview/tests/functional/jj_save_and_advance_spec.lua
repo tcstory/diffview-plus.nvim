@@ -1,3 +1,4 @@
+local ctx = require("diffview.runtime.context")
 -- End-to-end: `s`/`-` on a jj working-copy conflict resolves the current
 -- entry and either advances or drains the `conflicting` bucket. Exercises
 -- the full listener chain (refresh, callback, advance) that unit tests
@@ -71,8 +72,8 @@ describe("`toggle_stage_entry` on a jj working-copy conflict", function()
   local orig_emitter, original_config, saved_bootstrap
 
   before_each(function()
-    orig_emitter = DiffviewGlobal.emitter
-    DiffviewGlobal.emitter = EventEmitter()
+    orig_emitter = ctx.emitter
+    ctx.emitter = EventEmitter()
     original_config = vim.deepcopy(config.get_config())
     config.get_config().use_icons = false
     -- Disable auto-close so the tab survives long enough for post-resolve assertions.
@@ -84,7 +85,7 @@ describe("`toggle_stage_entry` on a jj working-copy conflict", function()
 
   after_each(function()
     if orig_emitter then
-      DiffviewGlobal.emitter = orig_emitter
+      ctx.emitter = orig_emitter
     end
     if original_config then
       config.setup(original_config)

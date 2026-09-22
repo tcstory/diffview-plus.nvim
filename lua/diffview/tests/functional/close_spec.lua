@@ -1,3 +1,4 @@
+local ctx = require("diffview.runtime.context")
 local api = vim.api
 
 describe("diffview.close", function()
@@ -13,15 +14,15 @@ describe("diffview.close", function()
   local orig_views
 
   before_each(function()
-    orig_emitter = DiffviewGlobal.emitter
-    DiffviewGlobal.emitter = EventEmitter()
+    orig_emitter = ctx.emitter
+    ctx.emitter = EventEmitter()
     -- Isolate the view registry so the dispatch logic has a known state.
     orig_views = lib.views
     lib.views = {}
   end)
 
   after_each(function()
-    DiffviewGlobal.emitter = orig_emitter
+    ctx.emitter = orig_emitter
     lib.views = orig_views
     -- Discard any tabpages left over from a test.
     while #api.nvim_list_tabpages() > 1 do

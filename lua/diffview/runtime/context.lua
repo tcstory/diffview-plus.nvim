@@ -7,15 +7,8 @@
 ---                    • `debug_level` — integer 0-10 from $DEBUG_DIFFVIEW
 ---                    • `state`       — mutable plugin-wide state bag
 ---
----                  This module is the Phase 2 bridge: callers can switch from
----                  `DiffviewGlobal.*` to `ctx.*` without waiting for the full
----                  DiffviewGlobal deletion.
----
---- Migration guide:
----   Before:  local logger = DiffviewGlobal.logger
----   After:   local ctx    = require("diffview.runtime.context")
----            ...
----            ctx.logger:info(...)
+---                  This is the sole owner of plugin-wide runtime services;
+---                  no global compatibility table is created.
 ---
 --- Owns:      The singleton instances once they are initialised.
 --- Does NOT own: The Logger and EventEmitter classes — those stay in
@@ -36,6 +29,8 @@
 ---@field emitter EventEmitter
 ---@field debug_level integer   # 0=off  1=normal  5=loading  10=rendering+async
 ---@field state table           # mutable plugin-wide state bag
+---@field bootstrap_done? boolean
+---@field bootstrap_ok? boolean
 local M = {
   --- Pre-bootstrap safe defaults so callers can read the fields without
   --- is_ready() guards.

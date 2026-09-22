@@ -3,7 +3,7 @@ local Commit = require("diffview.vcs.adapters.jj.commit").JjCommit
 local Diff2Hor = require("diffview.scene.layouts.diff_2_hor").Diff2Hor
 local FileEntry = require("diffview.scene.file_entry").FileEntry
 local FlagOption = require("diffview.vcs.flag_option").FlagOption
-local Job = require("diffview.job").Job
+local Job = require("diffview.runtime.process_task").ProcessTask
 local JjRev = require("diffview.vcs.adapters.jj.rev").JjRev
 local JobStatus = require("diffview.vcs.utils").JobStatus
 local LogEntry = require("diffview.vcs.log_entry").LogEntry
@@ -1207,7 +1207,7 @@ end
 function JjAdapter:stream_fh_data(state)
   ---@type AsyncListStream
   local stream
-  ---@type diffview.Job
+  ---@type diffview.ProcessTask
   local job
 
   local function on_stdout(_, line)
@@ -1250,7 +1250,7 @@ function JjAdapter:stream_fh_data(state)
   })
 
   local prepared = state.prepared_log_opts
-  job = Job({
+  job = Job.new({
     command = self:bin(),
     args = utils.vec_join(
       self:args(),
@@ -1539,9 +1539,9 @@ end
 ---@param revset string
 ---@param template string
 ---@param label string
----@return diffview.Job
+---@return diffview.ProcessTask
 local function log_job(self, revset, template, label)
-  return Job({
+  return Job.new({
     command = self:bin(),
     args = utils.vec_join(self:args(), "log", "-r", revset, "--no-graph", "-T", template),
     cwd = self.ctx.toplevel,
@@ -1763,7 +1763,7 @@ end
 ---@param opt vcs.adapter.LayoutOpt
 ---@param callback function
 JjAdapter.tracked_files = async.wrap(function(self, left, right, args, kind, opt, callback)
-  local job = Job({
+  local job = Job.new({
     command = self:bin(),
     args = utils.vec_join(self:args(), "diff", "-T", TRACKED_FILES_TEMPLATE, args),
     cwd = self.ctx.toplevel,
@@ -1884,7 +1884,7 @@ JjAdapter.show = async.wrap(function(self, path, rev, callback)
   end
 
   local job
-  job = Job({
+  job = Job.new({
     command = self:bin(),
     args = self:get_show_args(path, rev),
     cwd = self.ctx.toplevel,

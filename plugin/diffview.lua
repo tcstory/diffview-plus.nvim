@@ -75,7 +75,8 @@ command("DiffviewRefresh", function(ctx)
 end, { nargs = 0, bang = true })
 
 command("DiffviewLog", function()
+  local logger = require("diffview.runtime.context").logger
   vim.cmd(("sp %s | norm! G"):format(
-    vim.fn.fnameescape(DiffviewGlobal.logger.outfile)
+    vim.fn.fnameescape(logger.outfile)
   ))
 end, { nargs = 0 })
