@@ -1,6 +1,5 @@
 local async = require("diffview.async")
 local lazy = require("diffview.lazy")
-local oop = require("diffview.oop")
 
 local CommitLogPanel = lazy.access("diffview.ui.panels.commit_log_panel", "CommitLogPanel") ---@type CommitLogPanel|LazyModule
 local Diff = lazy.access("diffview.diff", "Diff") ---@type Diff|LazyModule
@@ -40,6 +39,8 @@ local same_rev = lazy.access(rev_lib, "same_rev") --[[@as fun(a: Rev?, b: Rev?):
 ---@field selected_row? integer Row to position the cursor on after opening the selected file.
 ---@field rename_threshold? integer Per-view rename similarity threshold (0-100). Overrides |diffview-config-rename_threshold| for this view.
 
+local StandardViewClass = StandardView.__get()
+
 ---@class DiffView : StandardView
 ---@operator call : DiffView
 ---@field adapter VCSAdapter
@@ -64,7 +65,17 @@ local same_rev = lazy.access(rev_lib, "same_rev") --[[@as fun(a: Rev?, b: Rev?):
 ---@field valid boolean
 ---@field update_needed? boolean # Set by external listeners to force a refresh on next redraw.
 ---@field watcher uv_fs_poll_t # UV fs poll handle.
-local DiffView = oop.create_class("DiffView", StandardView.__get())
+local DiffView = { __name = "DiffView" }
+DiffView.__index = DiffView
+DiffView.super_class = StandardViewClass
+setmetatable(DiffView, {
+  __index = StandardViewClass,
+  __call = function(_, ...)
+    local view = setmetatable({ class = DiffView }, DiffView)
+    view:init(...)
+    return view
+  end,
+})
 
 ---Return the canonical state store, adopting a panel-created store for
 ---compatibility with custom/test views that construct their panel first.
@@ -93,7 +104,7 @@ function DiffView:init(opt)
   self.options.selected_file = self.options.selected_file
     and pl:chain(self.options.selected_file):absolute():relative(self.adapter.ctx.toplevel):get()
 
-  self:super({
+  StandardViewClass.init(self, {
     panel = FilePanel(
       self.adapter,
       self.files,

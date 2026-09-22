@@ -16,9 +16,7 @@ local Signal = lazy.access("diffview.control", "Signal") ---@type Signal|LazyMod
 local WorkPool = lazy.access("diffview.control", "WorkPool") ---@type WorkPool|LazyModule
 local config = lazy.require("diffview.config") ---@module "diffview.config"
 local debounce = lazy.require("diffview.debounce") ---@module "diffview.debounce"
-local oop = lazy.require("diffview.oop") ---@module "diffview.oop"
 local panel_renderer = lazy.require("diffview.scene.views.file_history.render") ---@module "diffview.scene.views.file_history.render"
-local renderer = lazy.require("diffview.renderer") ---@module "diffview.renderer"
 local utils = lazy.require("diffview.utils") ---@module "diffview.utils"
 
 local api = vim.api
@@ -43,6 +41,8 @@ end
 
 ---@alias FileHistoryPanel.CurItem { [1]: LogEntry, [2]: FileEntry }
 
+local PanelClass = Panel.__get()
+
 ---@class FileHistoryPanel : Panel
 ---@field parent FileHistoryView
 ---@field adapter VCSAdapter
@@ -66,7 +66,17 @@ end
 ---@field _store_unsubscribe? function
 ---@field _component_entry_count integer
 ---@field _components_dirty boolean
-local FileHistoryPanel = oop.create_class("FileHistoryPanel", Panel.__get())
+local FileHistoryPanel = {}
+FileHistoryPanel.__index = FileHistoryPanel
+FileHistoryPanel.super_class = PanelClass
+setmetatable(FileHistoryPanel, {
+  __index = PanelClass,
+  __call = function(_, ...)
+    local panel = setmetatable({ class = FileHistoryPanel }, FileHistoryPanel)
+    panel:init(...)
+    return panel
+  end,
+})
 
 FileHistoryPanel.winopts = vim.tbl_extend("force", Panel.winopts, {
   cursorline = true,
@@ -97,7 +107,7 @@ FileHistoryPanel.bufopts = vim.tbl_extend("force", Panel.bufopts, {
 function FileHistoryPanel:init(opt)
   local conf = config.get_config()
 
-  self:super({
+  PanelClass.init(self, {
     config = conf.file_history_panel.win_config,
     bufname = "DiffviewFileHistoryPanel",
   })
@@ -220,7 +230,7 @@ FileHistoryPanel.destroy = async.sync_void(function(self)
   self.render_data:destroy()
 
   if self.components then
-    renderer.destroy_comp_struct(self.components)
+    component_renderer.destroy_comp_struct(self.components)
   end
 
   FileHistoryPanel.super_class.destroy(self)
@@ -269,7 +279,7 @@ function FileHistoryPanel:update_components()
 
   self.render_data:destroy()
   if self.components then
-    renderer.destroy_comp_struct(self.components)
+    component_renderer.destroy_comp_struct(self.components)
   end
 
   self.components = self.render_data:create_component({
@@ -285,7 +295,9 @@ function FileHistoryPanel:update_components()
   self._components_dirty = false
   self:_append_entry_components(1)
 
-  self.constrain_cursor = renderer.create_cursor_constraint({ self.components.log.entries.comp })
+  self.constrain_cursor = component_renderer.create_cursor_constraint({
+    self.components.log.entries.comp,
+  })
 end
 
 ---@class FileHistoryPanel.StateSnapshot

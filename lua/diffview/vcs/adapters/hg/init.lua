@@ -15,7 +15,6 @@ local async = require("diffview.async")
 local config = require("diffview.config")
 local capability_lib = require("diffview.vcs.capability")
 local lazy = require("diffview.lazy")
-local oop = require("diffview.oop")
 local path_builder = require("diffview.vcs.path_args")
 local utils = require("diffview.utils")
 local vcs_utils = require("diffview.vcs.utils")
@@ -29,7 +28,17 @@ local uv = vim.uv
 local M = {}
 
 ---@class HgAdapter : VCSAdapter
-local HgAdapter = oop.create_class("HgAdapter", VCSAdapter)
+local HgAdapter = {}
+HgAdapter.__index = HgAdapter
+HgAdapter.super_class = VCSAdapter
+setmetatable(HgAdapter, {
+  __index = VCSAdapter,
+  __call = function(_, ...)
+    local adapter = setmetatable({ class = HgAdapter }, HgAdapter)
+    adapter:init(...)
+    return adapter
+  end,
+})
 
 HgAdapter.Rev = HgRev
 HgAdapter.config_key = "hg"
@@ -149,7 +158,7 @@ end
 
 function HgAdapter:init(opt)
   opt = opt or {}
-  self:super(opt)
+  VCSAdapter.init(self)
 
   self.ctx = {
     toplevel = opt.toplevel,

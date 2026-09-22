@@ -1,18 +1,27 @@
 local async = require("diffview.async")
 local Diff3 = require("diffview.scene.layouts.diff_3").Diff3
-local oop = require("diffview.oop")
 
 local await = async.await
 
 local M = {}
 
 ---@class Diff3Mixed : Diff3
-local Diff3Mixed = oop.create_class("Diff3Mixed", Diff3)
+local Diff3Mixed = {}
+Diff3Mixed.__index = Diff3Mixed
+Diff3Mixed.super_class = Diff3
+setmetatable(Diff3Mixed, {
+  __index = Diff3,
+  __call = function(_, ...)
+    local layout = setmetatable({ class = Diff3Mixed }, Diff3Mixed)
+    layout:init(...)
+    return layout
+  end,
+})
 
 Diff3Mixed.name = "diff3_mixed"
 
 function Diff3Mixed:init(opt)
-  self:super(opt)
+  Diff3.init(self, opt)
 end
 
 ---@override

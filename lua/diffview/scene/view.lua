@@ -10,7 +10,6 @@ local EventEmitter = lazy.access("diffview.events", "EventEmitter") ---@type Eve
 local File = lazy.access("diffview.vcs.file", "File") ---@type vcs.File|LazyModule
 local Signal = lazy.access("diffview.control", "Signal") ---@type Signal|LazyModule
 local config = lazy.require("diffview.config") ---@module "diffview.config"
-local oop = lazy.require("diffview.oop") ---@module "diffview.oop"
 local utils = lazy.require("diffview.utils") ---@module "diffview.utils"
 local ViewShell = require("diffview.ui.view_shell")
 
@@ -113,15 +112,18 @@ local function restore_diffopt(view)
 end
 
 ---@enum LayoutMode
-local LayoutMode = oop.enum({
+local LayoutMode = {
   HORIZONTAL = 1,
   VERTICAL = 2,
-})
+}
+utils.add_reverse_lookup(LayoutMode)
 
 ---@class diffview.View.CloseOpts
 ---@field force? boolean
 
----@class View : diffview.Object
+---@class View
+---@field class View
+---@field super_class? View
 ---@field tabpage integer
 ---@field emitter EventEmitter
 ---@field default_layout Layout (class)
@@ -131,18 +133,50 @@ local LayoutMode = oop.enum({
 ---@field _global_callbacks table<any, function> # Callbacks registered on the global emitter, keyed by event.
 ---@field shell diffview.ViewShell
 ---@field effects diffview.EffectScope
-local View = oop.create_class("View")
+local View = { __name = "View" }
+View.__index = View
+setmetatable(View, {
+  __call = function(_, ...)
+    local view = setmetatable({ class = View }, View)
+    view:init(...)
+    return view
+  end,
+})
+
+---@param target table
+---@return boolean
+function View:instanceof(target)
+  local class = self.class
+  while class do
+    if class == target then
+      return true
+    end
+    class = class.super_class
+  end
+  return false
+end
+
+---@param value any
+---@return boolean
+function View:ancestorof(value)
+  return type(value) == "table" and type(value.instanceof) == "function" and value:instanceof(self)
+end
+
+---@return string
+function View:name()
+  return self.__name or "View"
+end
 
 ---@diagnostic disable unused-local
 
 ---@abstract
 function View:init_layout()
-  oop.abstract_stub()
+  error("Abstract method 'View:init_layout' must be implemented", 2)
 end
 
 ---@abstract
 function View:post_open()
-  oop.abstract_stub()
+  error("Abstract method 'View:post_open' must be implemented", 2)
 end
 
 ---@diagnostic enable unused-local

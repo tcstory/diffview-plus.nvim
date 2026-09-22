@@ -10,7 +10,6 @@ local FileEntry = lazy.access("diffview.scene.file_entry", "FileEntry") ---@type
 local Rev = lazy.access("diffview.vcs.adapters.git.rev", "GitRev") ---@type GitRev|LazyModule
 local RevType = lazy.access("diffview.vcs.rev", "RevType") ---@type RevType|LazyModule
 local vcs_utils = lazy.require("diffview.vcs") ---@module "diffview.vcs"
-local oop = lazy.require("diffview.oop") ---@module "diffview.oop"
 local utils = lazy.require("diffview.utils") ---@module "diffview.utils"
 
 local logger = require("diffview.runtime.context").logger
@@ -26,11 +25,23 @@ local M = {}
 ---@field right_null boolean Indicates that the right buffer should be represented by the null buffer.
 ---@field selected boolean|nil Indicates that this should be the initially selected file.
 
+local DiffViewClass = DiffView.__get()
+
 ---@class CDiffView : DiffView
 ---@field files any
 ---@field fetch_files function A function that should return an updated list of files.
 ---@field get_file_data function A function that is called with parameters `path: string` and `split: string`, and should return a list of lines that should make up the buffer.
-local CDiffView = oop.create_class("CDiffView", DiffView.__get())
+local CDiffView = { __name = "CDiffView" }
+CDiffView.__index = CDiffView
+CDiffView.super_class = DiffViewClass
+setmetatable(CDiffView, {
+  __index = DiffViewClass,
+  __call = function(_, ...)
+    local view = setmetatable({ class = CDiffView }, CDiffView)
+    view:init(...)
+    return view
+  end,
+})
 
 ---CDiffView constructor.
 ---@param opt any
@@ -60,7 +71,7 @@ function CDiffView:init(opt)
   self.fetch_files = opt.update_files
   self.get_file_data = opt.get_file_data
 
-  self:super(vim.tbl_extend("force", opt, { adapter = adapter }))
+  DiffViewClass.init(self, vim.tbl_extend("force", opt, { adapter = adapter }))
 
   if type(opt.files) == "table" and not vim.tbl_isempty(opt.files) then
     local files = self:create_file_entries(opt.files)

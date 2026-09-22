@@ -1,14 +1,23 @@
 local RevType = require("diffview.vcs.rev").RevType
 local Window = require("diffview.scene.window").Window
 local Layout = require("diffview.scene.layout").Layout
-local oop = require("diffview.oop")
 
 local M = {}
 
 ---@class Diff2 : Layout
 ---@field a Window
 ---@field b Window
-local Diff2 = oop.create_class("Diff2", Layout)
+local Diff2 = {}
+Diff2.__index = Diff2
+Diff2.super_class = Layout
+setmetatable(Diff2, {
+  __index = Layout,
+  __call = function(_, ...)
+    local layout = setmetatable({ class = Diff2 }, Diff2)
+    layout:init(...)
+    return layout
+  end,
+})
 
 ---@alias Diff2.WindowSymbol "a"|"b"
 
@@ -22,7 +31,7 @@ Diff2.symbols = { "a", "b" }
 
 ---@param opt Diff2.init.Opt
 function Diff2:init(opt)
-  self:super()
+  Layout.init(self)
   self.a = Window({ file = opt.a, id = opt.winid_a })
   self.b = Window({ file = opt.b, id = opt.winid_b })
   self:use_windows(self.a, self.b)

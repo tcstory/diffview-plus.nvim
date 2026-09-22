@@ -1,6 +1,5 @@
 local Diff1 = require("diffview.scene.layouts.diff_1").Diff1
 local Layout = require("diffview.scene.layout").Layout
-local oop = require("diffview.oop")
 
 local M = {}
 
@@ -12,7 +11,17 @@ local M = {}
 ---@class Diff1Raw : Diff1
 ---@field a_file vcs.File? Old-side file kept for ownership / `convert_layout` round-tripping; never windowed.
 ---@field _b_substituted boolean True when `b`'s `vcs.File` was rewritten to point at `revs.a` (status `D` round-trip) so `convert_layout` doesn't promote the wrong-rev file back into a Diff2.
-local Diff1Raw = oop.create_class("Diff1Raw", Diff1)
+local Diff1Raw = {}
+Diff1Raw.__index = Diff1Raw
+Diff1Raw.super_class = Diff1
+setmetatable(Diff1Raw, {
+  __index = Diff1,
+  __call = function(_, ...)
+    local layout = setmetatable({ class = Diff1Raw }, Diff1Raw)
+    layout:init(...)
+    return layout
+  end,
+})
 
 ---@class Diff1Raw.init.Opt : Diff1.init.Opt
 ---@field a vcs.File? Unwindowed a-side file (constructed by `FileEntry.with_layout`).
@@ -23,7 +32,7 @@ Diff1Raw.symbols = { "b" }
 
 ---@param opt Diff1Raw.init.Opt
 function Diff1Raw:init(opt)
-  self:super(opt)
+  Diff1.init(self, opt)
   self.a_file = opt and opt.a or nil
   if self.a_file then
     self.a_file.symbol = "a"

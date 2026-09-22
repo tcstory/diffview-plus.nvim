@@ -2,7 +2,6 @@ local Panel = require("diffview.ui.panel").Panel
 local actions = require("diffview.actions.builtins")
 local registry = require("diffview.runtime.action_registry")
 local get_user_config = require("diffview.config").get_config
-local oop = require("diffview.oop")
 local utils = require("diffview.utils")
 
 local api = vim.api
@@ -13,7 +12,17 @@ local M = {}
 ---@field parent StandardView
 ---@field keymap_groups string[]
 ---@field state table
-local HelpPanel = oop.create_class("HelpPanel", Panel)
+local HelpPanel = {}
+HelpPanel.__index = HelpPanel
+HelpPanel.super_class = Panel
+setmetatable(HelpPanel, {
+  __index = Panel,
+  __call = function(_, ...)
+    local panel = setmetatable({ class = HelpPanel }, HelpPanel)
+    panel:init(...)
+    return panel
+  end,
+})
 
 HelpPanel.winopts = vim.tbl_extend("force", Panel.winopts, {
   wrap = false,
@@ -36,7 +45,7 @@ HelpPanel.default_type = "float"
 ---@param opt HelpPanelSpec
 function HelpPanel:init(parent, keymap_groups, opt)
   opt = opt or {}
-  self:super({
+  Panel.init(self, {
     bufname = opt.name,
     config = opt.config or function()
       local c = vim.deepcopy(Panel.default_config_float)

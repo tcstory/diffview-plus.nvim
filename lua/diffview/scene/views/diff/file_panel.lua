@@ -1,6 +1,4 @@
 local config = require("diffview.config")
-local oop = require("diffview.oop")
-local renderer = require("diffview.renderer")
 local utils = require("diffview.utils")
 local Panel = require("diffview.ui.panel").Panel
 local component = require("diffview.ui.component")
@@ -27,7 +25,17 @@ local M = {}
 ---@field on_selection_changed fun(selected_files: table<string, true>)?
 ---@field store DiffStore
 ---@field view? DiffView
-local FilePanel = oop.create_class("FilePanel", Panel)
+local FilePanel = {}
+FilePanel.__index = FilePanel
+FilePanel.super_class = Panel
+setmetatable(FilePanel, {
+  __index = Panel,
+  __call = function(_, ...)
+    local panel = setmetatable({ class = FilePanel }, FilePanel)
+    panel:init(...)
+    return panel
+  end,
+})
 
 FilePanel.winopts = vim.tbl_extend("force", Panel.winopts, {
   cursorline = true,
@@ -55,7 +63,7 @@ FilePanel.bufopts = vim.tbl_extend("force", Panel.bufopts, {
 ---@param store? DiffStore
 function FilePanel:init(adapter, files, path_args, rev_pretty_name, store)
   local conf = config.get_config()
-  self:super({
+  Panel.init(self, {
     config = conf.file_panel.win_config,
     bufname = "DiffviewFilePanel",
   })
@@ -165,7 +173,7 @@ function FilePanel:update_components()
     },
   }) --[[@as CompStruct ]]
 
-  self.constrain_cursor = renderer.create_cursor_constraint({
+  self.constrain_cursor = component_renderer.create_cursor_constraint({
     self.components.conflicting.files.comp,
     self.components.working.files.comp,
     self.components.staged.files.comp,

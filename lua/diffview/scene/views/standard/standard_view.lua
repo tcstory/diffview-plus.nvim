@@ -9,7 +9,6 @@ local Diff4 = lazy.access("diffview.scene.layouts.diff_4", "Diff4") ---@type Dif
 local Panel = lazy.access("diffview.ui.panel", "Panel") ---@type Panel|LazyModule
 local View = lazy.access("diffview.scene.view", "View") ---@type View|LazyModule
 local config = lazy.require("diffview.config") ---@module "diffview.config"
-local oop = lazy.require("diffview.oop") ---@module "diffview.oop"
 local utils = lazy.require("diffview.utils") ---@module "diffview.utils"
 
 local ctx = require("diffview.runtime.context") ---@module "diffview.runtime.context"
@@ -34,6 +33,8 @@ local function swap_cancelled(view)
   return view.closing:check() or view.tabpage ~= api.nvim_get_current_tabpage()
 end
 
+local ViewClass = View.__get()
+
 ---@class StandardView : View
 ---@field panel Panel
 ---@field winopts table
@@ -46,7 +47,17 @@ end
 ---@field layout_states table<Layout, Layout.RoundtripState>
 ---@field package _set_file_in_flight Future? # Active `_set_file` worker; queued callers await this so `await(set_file)` returns only after the latest pending file is opened.
 ---@field package _set_file_pending FileEntry? # Newest file queued while `_set_file_in_flight` is set; the worker picks it up before terminating.
-local StandardView = oop.create_class("StandardView", View.__get())
+local StandardView = { __name = "StandardView" }
+StandardView.__index = StandardView
+StandardView.super_class = ViewClass
+setmetatable(StandardView, {
+  __index = ViewClass,
+  __call = function(_, ...)
+    local view = setmetatable({ class = StandardView }, StandardView)
+    view:init(...)
+    return view
+  end,
+})
 
 ---The key the arriving entry will look its state up under, when a rename links
 ---it to the entry being left. `--follow` lists a file under its old name in
@@ -76,7 +87,7 @@ end
 ---StandardView constructor
 function StandardView:init(opt)
   opt = opt or {}
-  self:super(opt)
+  ViewClass.init(self, opt)
   self.nulled = utils.sate(opt.nulled, false)
   self.panel = opt.panel or Panel()
   self.layouts = opt.layouts or {}

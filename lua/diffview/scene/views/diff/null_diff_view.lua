@@ -1,5 +1,4 @@
 local lazy = require("diffview.lazy")
-local oop = require("diffview.oop")
 
 local DiffView = lazy.access("diffview.scene.views.diff.diff_view", "DiffView") ---@type DiffView|LazyModule
 
@@ -16,7 +15,7 @@ local M = {}
 ---own `init`; the rest of the lifecycle is consolidated here.
 ---
 ---Subclasses are expected to:
----  * Call `self:super(opt)` with the standard `DiffView` opts (no rev arg,
+---  * Call `NullDiffView.init(self, opt)` with the standard `DiffView` opts (no rev arg,
 ---    no path args, an adapter that's a `NullAdapter`).
 ---  * Populate `self.files` (working / conflicting / staged buckets) before
 ---    returning from `init`. `post_open` reads the panel's ordered file
@@ -25,17 +24,25 @@ local M = {}
 ---    default hides the panel (a one-entry view has nothing useful to show
 ---    there); `FileDirDiffView` overrides to keep it because its list has
 ---    N entries.
+local DiffViewClass = DiffView.__get()
+
 ---@class NullDiffView : DiffView
 ---@operator call : NullDiffView
-local NullDiffView = oop.create_class("NullDiffView", DiffView.__get())
+local NullDiffView = { __name = "NullDiffView" }
+NullDiffView.__index = NullDiffView
+NullDiffView.super_class = DiffViewClass
+setmetatable(NullDiffView, {
+  __index = DiffViewClass,
+  __call = function(_, ...)
+    local view = setmetatable({ class = NullDiffView }, NullDiffView)
+    view:init(...)
+    return view
+  end,
+})
 
 ---@param opt table # Forwarded verbatim to `DiffView:init`.
 function NullDiffView:init(opt)
-  -- Explicit super-call required even though we add no behaviour: the OOP
-  -- system's `super` chain walks `__init_caller.super_class`, so a missing
-  -- `init` on this layer would cause `DiffView:init`'s own `self:super(...)`
-  -- to resolve back to `DiffView` (and call it twice with the wrong opts).
-  self:super(opt)
+  DiffViewClass.init(self, opt)
 end
 
 ---Read a file from disk into a list of lines. Returns an empty table when

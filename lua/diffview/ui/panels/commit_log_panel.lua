@@ -2,7 +2,6 @@ local Job = require("diffview.runtime.process_task").ProcessTask
 local Panel = require("diffview.ui.panel").Panel
 local async = require("diffview.async")
 local get_user_config = require("diffview.config").get_config
-local oop = require("diffview.oop")
 local utils = require("diffview.utils")
 
 local await = async.await
@@ -14,7 +13,17 @@ local M = {}
 ---@field args string[]
 ---@field paths? string[]
 ---@field job_out string[]
-local CommitLogPanel = oop.create_class("CommitLogPanel", Panel)
+local CommitLogPanel = {}
+CommitLogPanel.__index = CommitLogPanel
+CommitLogPanel.super_class = Panel
+setmetatable(CommitLogPanel, {
+  __index = Panel,
+  __call = function(_, ...)
+    local panel = setmetatable({ class = CommitLogPanel }, CommitLogPanel)
+    panel:init(...)
+    return panel
+  end,
+})
 
 CommitLogPanel.winopts = vim.tbl_extend("force", Panel.winopts, {
   wrap = true,
@@ -54,7 +63,7 @@ end
 ---@param adapter VCSAdapter
 ---@param opt CommitLogPanelSpec
 function CommitLogPanel:init(parent, adapter, opt)
-  self:super({
+  Panel.init(self, {
     bufname = opt.name,
     config = opt.config or get_user_config().commit_log_panel.win_config,
   })

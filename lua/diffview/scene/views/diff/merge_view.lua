@@ -1,5 +1,4 @@
 local lazy = require("diffview.lazy")
-local oop = require("diffview.oop")
 
 local DiffView = lazy.access("diffview.scene.views.diff.diff_view", "DiffView") ---@type DiffView|LazyModule
 local File = lazy.access("diffview.vcs.file", "File") ---@type vcs.File|LazyModule
@@ -16,6 +15,8 @@ local api = vim.api
 
 local M = {}
 
+local NullDiffViewClass = NullDiffView.__get()
+
 ---@class MergeView : NullDiffView
 ---@operator call : MergeView
 ---@field merge_session MergeSession
@@ -23,7 +24,17 @@ local M = {}
 ---@field panel_collapsed boolean
 ---@field panel_expanded_width? integer
 ---@field _winbar_routes? table
-local MergeView = oop.create_class("MergeView", NullDiffView.__get())
+local MergeView = { __name = "MergeView" }
+MergeView.__index = MergeView
+MergeView.super_class = NullDiffViewClass
+setmetatable(MergeView, {
+  __index = NullDiffViewClass,
+  __call = function(_, ...)
+    local view = setmetatable({ class = MergeView }, MergeView)
+    view:init(...)
+    return view
+  end,
+})
 
 ---@param opt { adapter: GitAdapter, paths: string[] }
 function MergeView:init(opt)
@@ -36,7 +47,7 @@ function MergeView:init(opt)
   self.applied = false
   self.panel_collapsed = false
 
-  self:super({
+  NullDiffViewClass.init(self, {
     adapter = opt.adapter,
     path_args = opt.paths,
     rev_arg = nil,

@@ -779,7 +779,7 @@ describe("diffview.ui.panel", function()
     end
 
     it("list mode builds file components from list entries", function()
-      local renderer = require("diffview.renderer")
+      local renderer = require("diffview.ui.component_renderer")
       local orig_create_cursor_constraint = renderer.create_cursor_constraint
 
       local f1 = { path = "a.lua" }
@@ -824,7 +824,7 @@ describe("diffview.ui.panel", function()
     end)
 
     it("tree mode calls update_statuses and create_comp_schema on each tree", function()
-      local renderer = require("diffview.renderer")
+      local renderer = require("diffview.ui.component_renderer")
       local orig_create_cursor_constraint = renderer.create_cursor_constraint
 
       local statuses_updated = {}

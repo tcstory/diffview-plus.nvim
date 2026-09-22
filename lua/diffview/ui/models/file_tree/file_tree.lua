@@ -1,7 +1,5 @@
-local oop = require("diffview.oop")
 local utils = require("diffview.utils")
 local Node = require("diffview.ui.models.file_tree.node").Node
-local Model = require("diffview.ui.model").Model
 
 local pl = utils.path
 
@@ -15,9 +13,17 @@ local M = {}
 ---@field status string
 ---@field _node? Node
 
----@class FileTree : Model
+---@class FileTree
 ---@field root Node
-local FileTree = oop.create_class("FileTree", Model)
+local FileTree = {}
+FileTree.__index = FileTree
+setmetatable(FileTree, {
+  __call = function(_, ...)
+    local tree = setmetatable({}, FileTree)
+    tree:init(...)
+    return tree
+  end,
+})
 
 ---FileTree constructor
 ---@param files FileEntry[]?

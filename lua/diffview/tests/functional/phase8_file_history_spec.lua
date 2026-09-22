@@ -7,7 +7,7 @@ local Diff2Hor = require("diffview.scene.layouts.diff_2_hor").Diff2Hor
 local Diff2Ver = require("diffview.scene.layouts.diff_2_ver").Diff2Ver
 local GitRev = require("diffview.vcs.adapters.git.rev").GitRev
 local RevType = require("diffview.vcs.rev").RevType
-local RenderData = require("diffview.renderer").RenderData
+local RenderData = require("diffview.ui.component_renderer").RenderData
 local component = require("diffview.ui.component")
 
 describe("Phase 8 file-history migration", function()

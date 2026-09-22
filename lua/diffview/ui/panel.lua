@@ -1,8 +1,7 @@
 local EventEmitter = require("diffview.events").EventEmitter
 local File = require("diffview.vcs.file").File
 local PerfTimer = require("diffview.perf").PerfTimer
-local oop = require("diffview.oop")
-local renderer = require("diffview.renderer")
+local renderer = require("diffview.ui.component_renderer")
 local utils = require("diffview.utils")
 
 local api = vim.api
@@ -20,9 +19,11 @@ local uid_counter = 0
 ---@type PerfTimer
 local perf = PerfTimer("[Panel] redraw")
 
----@class Panel : diffview.Object
+---@class Panel
+---@field class Panel
+---@field super_class? Panel
 ---@field type PanelType
----@field config_producer PanelConfig.user|fun(): PanelConfig.user
+---@field config_producer PanelConfig|PanelConfig.user|fun(): PanelConfig.user
 ---@field state table
 ---@field bufid integer
 ---@field winid integer
@@ -33,7 +34,15 @@ local perf = PerfTimer("[Panel] redraw")
 ---@field init_buffer_opts function Abstract
 ---@field update_components function Abstract
 ---@field render function Abstract
-local Panel = oop.create_class("Panel")
+local Panel = {}
+Panel.__index = Panel
+setmetatable(Panel, {
+  __call = function(_, ...)
+    local panel = setmetatable({ class = Panel }, Panel)
+    panel:init(...)
+    return panel
+  end,
+})
 
 Panel.winopts = {
   relativenumber = false,
@@ -151,9 +160,9 @@ Panel.au = {
 }
 
 ---@class PanelSpec
----@field type PanelType
----@field config PanelConfig.user|fun(): PanelConfig.user
----@field bufname string
+---@field type? PanelType
+---@field config? PanelConfig|PanelConfig.user|fun(): PanelConfig.user
+---@field bufname? string
 
 ---@param opt PanelSpec
 function Panel:init(opt)
@@ -588,11 +597,11 @@ function Panel:apply_keymaps(keymap_key, extra_defaults)
 end
 
 function Panel:update_components()
-  oop.abstract_stub()
+  error("Abstract method 'Panel:update_components' must be implemented", 2)
 end
 
 function Panel:render()
-  oop.abstract_stub()
+  error("Abstract method 'Panel:render' must be implemented", 2)
 end
 
 function Panel:redraw()

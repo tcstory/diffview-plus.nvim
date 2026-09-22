@@ -1,5 +1,4 @@
 local helpers = require("diffview.tests.helpers")
-local oop = require("diffview.oop")
 
 local eq = helpers.eq
 
@@ -9,7 +8,7 @@ local eq = helpers.eq
 -- - 58f14a5: more misc. bug fixes (#21)
 
 -----------------------------------------------------------------------
--- 60fc176: fix(oop): use dot syntax for super_class call in
+-- 60fc176: use dot syntax for explicit base-method delegation in
 -- CommitLogPanel. The colon syntax invoked the super class as a
 -- constructor, producing a spurious instance; every other super-call
 -- in the codebase uses dot access (e.g. Foo.super_class.method(self)).
@@ -20,8 +19,27 @@ describe("super_class dot syntax (60fc176)", function()
   -- super_class.method(self) correctly delegates to the parent without
   -- constructing a new instance.
 
-  local Parent = oop.create_class("Parent")
-  local Child = oop.create_class("Child", Parent)
+  local Parent = {}
+  Parent.__index = Parent
+  setmetatable(Parent, {
+    __call = function(_)
+      local instance = setmetatable({}, Parent)
+      instance:init()
+      return instance
+    end,
+  })
+
+  local Child = {}
+  Child.__index = Child
+  Child.super_class = Parent
+  setmetatable(Child, {
+    __index = Parent,
+    __call = function(_)
+      local instance = setmetatable({}, Child)
+      instance:init()
+      return instance
+    end,
+  })
 
   local parent_calls
 
@@ -60,17 +78,10 @@ describe("super_class dot syntax (60fc176)", function()
     eq(1, parent_calls)
   end)
 
-  it("colon syntax on super_class would treat it as a constructor call", function()
-    -- This test documents why the colon syntax was wrong:
-    -- Child:super_class() would call the __call metamethod on
-    -- super_class (which is the Parent class), constructing a new
-    -- instance rather than returning the class table.
+  it("keeps explicit base metadata on the type table", function()
     local inst = Child()
-    local constructed = Child:super_class()
-    -- The result of __call is a new instance, not the class table.
-    assert.truthy(constructed.class, "colon call should produce an instance")
-    eq(Parent, constructed.class)
-    -- Meanwhile, dot access gives the class itself.
+    eq(Child, getmetatable(inst))
+    eq(Parent, Child.super_class)
     assert.is_nil(Child.super_class.class)
   end)
 end)

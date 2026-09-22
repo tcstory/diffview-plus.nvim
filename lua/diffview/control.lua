@@ -203,7 +203,7 @@ WorkPool.await = async.sync_void(function(self)
   end
 end)
 
----@class Permit : diffview.Object
+---@class Permit
 ---@operator call : Permit
 ---@field parent Semaphore
 local Permit = type_table()
@@ -225,7 +225,7 @@ function Permit:forget()
   end
 end
 
----@class Semaphore : diffview.Object
+---@class Semaphore
 ---@operator call : Semaphore
 ---@field initial_count integer
 ---@field permit_count integer

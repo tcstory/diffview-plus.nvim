@@ -1,5 +1,4 @@
 local lazy = require("diffview.lazy")
-local oop = require("diffview.oop")
 
 local Diff2Hor = lazy.access("diffview.scene.layouts.diff_2_hor", "Diff2Hor") ---@type Diff2Hor|LazyModule
 local FileEntry = lazy.access("diffview.scene.file_entry", "FileEntry") ---@type FileEntry|LazyModule
@@ -13,11 +12,23 @@ local pl = lazy.access(utils, "path") --[[@as PathLib ]]
 
 local M = {}
 
+local NullDiffViewClass = NullDiffView.__get()
+
 ---@class FileDiffView : NullDiffView
 ---@operator call : FileDiffView
 ---@field left_path string Absolute path to the left file.
 ---@field right_path string Absolute path to the right file.
-local FileDiffView = oop.create_class("FileDiffView", NullDiffView.__get())
+local FileDiffView = { __name = "FileDiffView" }
+FileDiffView.__index = FileDiffView
+FileDiffView.super_class = NullDiffViewClass
+setmetatable(FileDiffView, {
+  __index = NullDiffViewClass,
+  __call = function(_, ...)
+    local view = setmetatable({ class = FileDiffView }, FileDiffView)
+    view:init(...)
+    return view
+  end,
+})
 
 ---FileDiffView constructor
 ---@param opt { adapter: NullAdapter, left_path: string, right_path: string }
@@ -26,7 +37,7 @@ function FileDiffView:init(opt)
   local right = NullRev(RevType.LOCAL)
 
   -- Let DiffView:init() handle standard setup (FileDict, FilePanel, events, etc.).
-  self:super({
+  NullDiffViewClass.init(self, {
     adapter = opt.adapter,
     path_args = {},
     rev_arg = nil,

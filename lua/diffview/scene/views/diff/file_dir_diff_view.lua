@@ -1,5 +1,4 @@
 local lazy = require("diffview.lazy")
-local oop = require("diffview.oop")
 
 local Diff4Mixed = lazy.access("diffview.scene.layouts.diff_4_mixed", "Diff4Mixed") ---@type Diff4Mixed|LazyModule
 local File = lazy.access("diffview.vcs.file", "File") ---@type vcs.File|LazyModule
@@ -105,12 +104,24 @@ end
 ---both LOCAL and editable. Three-pane mode mirrors jj's diff-editor 3-pane
 ---contract: a = `$left/<rel>` (read-only), b = `$output/<rel>` (LOCAL,
 ---editable), c = `$right/<rel>` (read-only).
+local NullDiffViewClass = NullDiffView.__get()
+
 ---@class FileDirDiffView : NullDiffView
 ---@operator call : FileDirDiffView
 ---@field left_path string Absolute path to the "$left" directory.
 ---@field right_path string Absolute path to the "$right" directory.
 ---@field output_path? string Absolute path to the editable "$output" directory; nil for 2-pane mode.
-local FileDirDiffView = oop.create_class("FileDirDiffView", NullDiffView.__get())
+local FileDirDiffView = { __name = "FileDirDiffView" }
+FileDirDiffView.__index = FileDirDiffView
+FileDirDiffView.super_class = NullDiffViewClass
+setmetatable(FileDirDiffView, {
+  __index = NullDiffViewClass,
+  __call = function(_, ...)
+    local view = setmetatable({ class = FileDirDiffView }, FileDirDiffView)
+    view:init(...)
+    return view
+  end,
+})
 
 ---@class FileDirDiffView.init.Opt
 ---@field adapter NullAdapter
@@ -133,7 +144,7 @@ function FileDirDiffView:init(opt)
     a_rev = NullRev(RevType.LOCAL)
   end
 
-  self:super({
+  NullDiffViewClass.init(self, {
     adapter = opt.adapter,
     path_args = {},
     rev_arg = nil,

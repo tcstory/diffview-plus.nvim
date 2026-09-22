@@ -1,6 +1,5 @@
 local async = require("diffview.async")
 local lazy = require("diffview.lazy")
-local oop = require("diffview.oop")
 
 local NullRev = lazy.access("diffview.vcs.adapters.null.rev", "NullRev") ---@type NullRev|LazyModule
 local VCSAdapter = lazy.access("diffview.vcs.adapter", "VCSAdapter") ---@type VCSAdapter|LazyModule
@@ -11,7 +10,18 @@ local M = {}
 
 ---@class NullAdapter : VCSAdapter
 ---@field Rev NullRev
-local NullAdapter = oop.create_class("NullAdapter", VCSAdapter.__get())
+local VCSAdapterClass = VCSAdapter.__get()
+local NullAdapter = {}
+NullAdapter.__index = NullAdapter
+NullAdapter.super_class = VCSAdapterClass
+setmetatable(NullAdapter, {
+  __index = VCSAdapterClass,
+  __call = function(_, ...)
+    local adapter = setmetatable({ class = NullAdapter }, NullAdapter)
+    adapter:init(...)
+    return adapter
+  end,
+})
 
 NullAdapter.Rev = NullRev --[[@as NullRev ]]
 NullAdapter.capabilities = capability_lib.set(capability_lib.Capability.STATUS)
@@ -27,7 +37,7 @@ end
 
 ---@param opt NullAdapter.create.Opt
 function NullAdapter:init(opt)
-  self:super()
+  VCSAdapterClass.init(self)
   self.ctx = {
     toplevel = opt.toplevel,
     dir = opt.toplevel,

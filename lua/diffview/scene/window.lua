@@ -1,6 +1,5 @@
 local async = require("diffview.async")
 local lazy = require("diffview.lazy")
-local oop = require("diffview.oop")
 
 local EventEmitter = lazy.access("diffview.events", "EventEmitter") ---@type EventEmitter|LazyModule
 local File = lazy.access("diffview.vcs.file", "File") ---@type vcs.File|LazyModule
@@ -20,13 +19,21 @@ local logger = ctx.logger
 
 local M = {}
 
----@class Window : diffview.Object
+---@class Window
 ---@field id integer
 ---@field file vcs.File
 ---@field parent Layout
 ---@field emitter EventEmitter
 ---@field lease? diffview.WindowLease
-local Window = oop.create_class("Window")
+local Window = {}
+Window.__index = Window
+setmetatable(Window, {
+  __call = function(_, ...)
+    local window = setmetatable({}, Window)
+    window:init(...)
+    return window
+  end,
+})
 
 Window.winopt_store = {}
 Window._set_buf_warned = false

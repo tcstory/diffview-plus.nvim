@@ -1,7 +1,6 @@
 local async = require("diffview.async")
 local debounce = require("diffview.debounce")
 local lazy = require("diffview.lazy")
-local oop = require("diffview.oop")
 
 local CommitLogPanel = lazy.access("diffview.ui.panels.commit_log_panel", "CommitLogPanel") ---@type CommitLogPanel|LazyModule
 local EventName = lazy.access("diffview.events", "EventName") ---@type EventName|LazyModule
@@ -22,6 +21,8 @@ local await = async.await
 
 local M = {}
 
+local StandardViewClass = StandardView.__get()
+
 ---@class FileHistoryView : StandardView
 ---@operator call:FileHistoryView
 ---@field adapter VCSAdapter
@@ -33,7 +34,17 @@ local M = {}
 ---@field pinned_path? string # Working-tree path the b-window is pinned to. Seeded from `path_args[1]` for single-file pinning; the cursor follower updates it when the user highlights a file row in multi-file mode.
 ---@field _pinned_cursor_follow? CancellableFn # Debounced CursorMoved handler installed in pin_local mode; closed in `close()` to release the underlying uv timer.
 ---@field _pinned_b_files table<string, vcs.File> # View-owned cache of working-tree `vcs.File` instances keyed by path. Each pin-local b-window across the entire history reuses the entry for its path, so identity is stable across panel refreshes; entry destruction skips files whose standard layout instance marks the b-symbol as borrowed, and the view destroys them in `close()`.
-local FileHistoryView = oop.create_class("FileHistoryView", StandardView.__get())
+local FileHistoryView = { __name = "FileHistoryView" }
+FileHistoryView.__index = FileHistoryView
+FileHistoryView.super_class = StandardViewClass
+setmetatable(FileHistoryView, {
+  __index = StandardViewClass,
+  __call = function(_, ...)
+    local view = setmetatable({ class = FileHistoryView }, FileHistoryView)
+    view:init(...)
+    return view
+  end,
+})
 
 ---@return boolean
 function FileHistoryView:is_pin_local()
@@ -64,7 +75,7 @@ function FileHistoryView:init(opt)
   self.no_panel = opt.no_panel
   self._pinned_b_files = self.store.view.pinned_files
 
-  self:super({
+  StandardViewClass.init(self, {
     panel = FileHistoryPanel({
       parent = self,
       adapter = self.adapter,

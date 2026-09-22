@@ -1,13 +1,22 @@
 describe("diffview.lib", function()
   local lib = require("diffview.lib")
-  local oop = require("diffview.oop")
   local RevType = require("diffview.vcs.rev").RevType
 
   -- Minimal stub class to satisfy the ancestorof / instanceof checks without
   -- pulling in the full StandardView/FilePanel dependency chain.
   local DiffView = require("diffview.scene.views.diff.diff_view").DiffView
 
-  local StubDiffView = oop.create_class("StubDiffView", DiffView)
+  local StubDiffView = {}
+  StubDiffView.__index = StubDiffView
+  StubDiffView.super_class = DiffView
+  setmetatable(StubDiffView, {
+    __index = DiffView,
+    __call = function(_, ...)
+      local view = setmetatable({ class = StubDiffView }, StubDiffView)
+      view:init(...)
+      return view
+    end,
+  })
 
   function StubDiffView:init(opt)
     self.adapter = opt.adapter

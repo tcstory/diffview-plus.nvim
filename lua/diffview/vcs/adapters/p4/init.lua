@@ -17,7 +17,6 @@ local async = require("diffview.async")
 local config = require("diffview.config")
 local capability_lib = require("diffview.vcs.capability")
 local lazy = require("diffview.lazy")
-local oop = require("diffview.oop")
 local utils = require("diffview.utils")
 local vcs_utils = require("diffview.vcs.utils")
 
@@ -33,7 +32,17 @@ local M = {}
 
 ---@class P4Adapter : VCSAdapter
 ---@operator call : P4Adapter
-local P4Adapter = oop.create_class("P4Adapter", VCSAdapter)
+local P4Adapter = {}
+P4Adapter.__index = P4Adapter
+P4Adapter.super_class = VCSAdapter
+setmetatable(P4Adapter, {
+  __index = VCSAdapter,
+  __call = function(_, ...)
+    local adapter = setmetatable({ class = P4Adapter }, P4Adapter)
+    adapter:init(...)
+    return adapter
+  end,
+})
 
 P4Adapter.Rev = P4Rev
 P4Adapter.config_key = "p4" -- Key for config table; reuses the `HgLogOptions` schema.
@@ -205,7 +214,7 @@ end
 ---@param opt vcs.adapter.VCSAdapter.Opt
 function P4Adapter:init(opt)
   opt = opt or {}
-  self:super(opt) -- Calls base VCSAdapter init
+  VCSAdapter.init(self)
 
   self.ctx = {
     toplevel = opt.toplevel, -- Client root

@@ -14,7 +14,6 @@ local async = require("diffview.async")
 local config = require("diffview.config")
 local capability_lib = require("diffview.vcs.capability")
 local lazy = require("diffview.lazy")
-local oop = require("diffview.oop")
 local path_builder = require("diffview.vcs.path_args")
 local utils = require("diffview.utils")
 local vcs_utils = require("diffview.vcs.utils")
@@ -30,7 +29,17 @@ local M = {}
 ---@class JjAdapter : VCSAdapter
 ---@operator call : JjAdapter
 ---@field _merge_context_cache? JjAdapter.MergeContextData # Set by `tracked_files` when it detects a working-copy conflict; read by `get_merge_context`.
-local JjAdapter = oop.create_class("JjAdapter", VCSAdapter)
+local JjAdapter = {}
+JjAdapter.__index = JjAdapter
+JjAdapter.super_class = VCSAdapter
+setmetatable(JjAdapter, {
+  __index = VCSAdapter,
+  __call = function(_, ...)
+    local adapter = setmetatable({ class = JjAdapter }, JjAdapter)
+    adapter:init(...)
+    return adapter
+  end,
+})
 
 JjAdapter.Rev = JjRev
 JjAdapter.config_key = "jj"
@@ -122,7 +131,7 @@ end
 ---@param opt vcs.adapter.VCSAdapter.Opt
 function JjAdapter:init(opt)
   opt = opt or {}
-  self:super(opt)
+  VCSAdapter.init(self)
 
   self.ctx = {
     toplevel = opt.toplevel,

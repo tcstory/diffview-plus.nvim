@@ -5,12 +5,13 @@ local JobStatus = lazy.access("diffview.vcs.utils", "JobStatus") ---@type JobSta
 local Panel = lazy.access("diffview.ui.panel", "Panel") ---@type Panel|LazyModule
 local arg_parser = lazy.require("diffview.arg_parser") ---@module "diffview.arg_parser"
 local config = lazy.require("diffview.config") ---@module "diffview.config"
-local oop = lazy.require("diffview.oop") ---@module "diffview.oop"
 local panel_renderer = lazy.require("diffview.scene.views.file_history.render") ---@module "diffview.scene.views.file_history.render"
 local utils = lazy.require("diffview.utils") ---@module "diffview.utils"
 
 local api = vim.api
 local M = {}
+
+local PanelClass = Panel.__get()
 
 ---@class FHOptionPanel : Panel
 ---@field parent FileHistoryPanel
@@ -18,7 +19,17 @@ local M = {}
 ---@field render_data RenderData
 ---@field option_state LogOptions
 ---@field components CompStruct
-local FHOptionPanel = oop.create_class("FHOptionPanel", Panel.__get())
+local FHOptionPanel = {}
+FHOptionPanel.__index = FHOptionPanel
+FHOptionPanel.super_class = PanelClass
+setmetatable(FHOptionPanel, {
+  __index = PanelClass,
+  __call = function(_, ...)
+    local panel = setmetatable({ class = FHOptionPanel }, FHOptionPanel)
+    panel:init(...)
+    return panel
+  end,
+})
 
 FHOptionPanel.winopts = vim.tbl_extend("force", Panel.winopts, {
   cursorline = true,
@@ -44,7 +55,7 @@ FHOptionPanel.bufopts = {
 ---FHOptionPanel constructor.
 ---@param parent FileHistoryPanel
 function FHOptionPanel:init(parent)
-  self:super({
+  PanelClass.init(self, {
     ---@type PanelSplitSpec
     config = {
       position = "bottom",

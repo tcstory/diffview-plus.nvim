@@ -1,6 +1,5 @@
 local async = require("diffview.async")
 local lazy = require("diffview.lazy")
-local oop = require("diffview.oop")
 
 local EventEmitter = lazy.access("diffview.events", "EventEmitter") ---@type EventEmitter|LazyModule
 local Window = lazy.access("diffview.scene.window", "Window") ---@type Window|LazyModule
@@ -13,7 +12,9 @@ local await = async.await
 
 local M = {}
 
----@class Layout : diffview.Object
+---@class Layout
+---@field class Layout
+---@field super_class? Layout
 ---@field windows Window[]
 ---@field emitter EventEmitter
 ---@field pivot_producer fun(): integer?
@@ -22,7 +23,34 @@ local M = {}
 ---@field symbols string[] # Set on subclasses: ordered window-slot keys (e.g. {"a","b"}).
 ---@field engine diffview.LayoutEngine
 ---@field spec? diffview.LayoutSpec
-local Layout = oop.create_class("Layout")
+local Layout = {}
+Layout.__index = Layout
+setmetatable(Layout, {
+  __call = function(_, ...)
+    local layout = setmetatable({ class = Layout }, Layout)
+    layout:init(...)
+    return layout
+  end,
+})
+
+---@param target table
+---@return boolean
+function Layout:instanceof(target)
+  local class = self.class
+  while class do
+    if class == target then
+      return true
+    end
+    class = class.super_class
+  end
+  return false
+end
+
+---@param value any
+---@return boolean
+function Layout:ancestorof(value)
+  return type(value) == "table" and type(value.instanceof) == "function" and value:instanceof(self)
+end
 
 function Layout:init(opt)
   opt = opt or {}
@@ -38,7 +66,7 @@ end
 ---@param self Layout
 ---@param pivot? integer The window ID of the window around which the layout will be created.
 Layout.create = async.void(function(self, pivot)
-  oop.abstract_stub()
+  error("Abstract method 'Layout:create' must be implemented", 2)
 end)
 
 ---@abstract
@@ -47,7 +75,7 @@ end)
 ---@param sym string
 ---@return boolean
 function Layout.should_null(rev, status, sym)
-  oop.abstract_stub()
+  error("Abstract function 'Layout.should_null' must be implemented", 2)
 end
 
 ---Set a file on the window for the given symbol and tag it.
@@ -78,7 +106,7 @@ end)
 ---@abstract
 ---@return Window
 function Layout:get_main_win()
-  oop.abstract_stub()
+  error("Abstract method 'Layout:get_main_win' must be implemented", 2)
 end
 
 ---@diagnostic enable: unused-local, missing-return

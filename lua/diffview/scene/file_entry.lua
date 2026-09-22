@@ -1,5 +1,4 @@
 local lazy = require("diffview.lazy")
-local oop = require("diffview.oop")
 
 local Diff1 = lazy.access("diffview.scene.layouts.diff_1", "Diff1") ---@type Diff1|LazyModule
 local Diff1Inline = lazy.access("diffview.scene.layouts.diff_1_inline", "Diff1Inline") ---@type Diff1Inline|LazyModule
@@ -53,7 +52,7 @@ end
 ---@field c? Rev
 ---@field d? Rev
 
----@class FileEntry : diffview.Object
+---@class FileEntry
 ---@field adapter VCSAdapter
 ---@field path string
 ---@field oldpath string
@@ -73,7 +72,15 @@ end
 ---@field opened boolean
 ---@field pin_local boolean
 ---@field _extra_owned vcs.File[] # Files this entry owns that aren't reachable through `layout:owned_files()` (e.g. one-off nulled fallbacks built for a window whose symbol is in `shared_symbols`).
-local FileEntry = oop.create_class("FileEntry")
+local FileEntry = {}
+FileEntry.__index = FileEntry
+setmetatable(FileEntry, {
+  __call = function(_, ...)
+    local entry = setmetatable({}, FileEntry)
+    entry:init(...)
+    return entry
+  end,
+})
 
 ---@class FileEntry.init.Opt
 ---@field adapter VCSAdapter

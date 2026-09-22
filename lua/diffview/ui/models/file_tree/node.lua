@@ -1,15 +1,22 @@
 local config = require("diffview.config")
-local oop = require("diffview.oop")
 local utils = require("diffview.utils")
 local M = {}
 
----@class Node : diffview.Object
+---@class Node
 ---@field parent Node
 ---@field name string
 ---@field data any
 ---@field children Node[]
 ---@field depth integer|nil
-local Node = oop.create_class("Node")
+local Node = {}
+Node.__index = Node
+setmetatable(Node, {
+  __call = function(_, ...)
+    local node = setmetatable({}, Node)
+    node:init(...)
+    return node
+  end,
+})
 
 ---Node constructor
 ---@param name string

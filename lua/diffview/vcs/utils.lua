@@ -3,7 +3,6 @@ local RevType = require("diffview.vcs.rev").RevType
 local Scanner = require("diffview.scanner")
 local Semaphore = require("diffview.control").Semaphore
 local async = require("diffview.async")
-local oop = require("diffview.oop")
 local utils = require("diffview.utils")
 
 local api = vim.api
@@ -53,13 +52,14 @@ function M.filter_merge_artifacts(files)
 end
 
 ---@enum JobStatus
-local JobStatus = oop.enum({
+local JobStatus = {
   SUCCESS = 1,
   PROGRESS = 2,
   ERROR = 3,
   KILLED = 4,
   FATAL = 5,
-})
+}
+utils.add_reverse_lookup(JobStatus)
 
 ---@type diffview.ProcessTask[]
 local sync_jobs = {}

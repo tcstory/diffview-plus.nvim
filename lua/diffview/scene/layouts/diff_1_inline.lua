@@ -5,7 +5,6 @@ local Diff1 = require("diffview.scene.layouts.diff_1").Diff1
 local Layout = require("diffview.scene.layout").Layout
 
 local await, pawait = async.await, async.pawait
-local oop = require("diffview.oop")
 
 local config = lazy.require("diffview.config") ---@module "diffview.config"
 local inline_diff = lazy.require("diffview.scene.inline_diff") ---@module "diffview.scene.inline_diff"
@@ -87,7 +86,17 @@ local INLINE_FOLDEXPR = "v:lua.require'diffview.scene.inline_diff'.foldexpr(v:ln
 ---@field _suppress_repaint boolean? Set by batched buffer edits (e.g. a multi-hunk `diffget`) to turn `_repaint` into a no-op so a single trailing call covers the whole batch.
 ---@field _resize_autocmd integer? Autocmd id for the global WinResized/VimResized handler that re-emits `full_width` deletion padding when the window dimensions change.
 ---@field _resize_debounced CancellableFn? Trailing-edge debounced `_repaint` used by the resize handler so a drag-resize burst coalesces into one re-emit.
-local Diff1Inline = oop.create_class("Diff1Inline", Diff1)
+local Diff1Inline = {}
+Diff1Inline.__index = Diff1Inline
+Diff1Inline.super_class = Diff1
+setmetatable(Diff1Inline, {
+  __index = Diff1,
+  __call = function(_, ...)
+    local layout = setmetatable({ class = Diff1Inline }, Diff1Inline)
+    layout:init(...)
+    return layout
+  end,
+})
 
 ---@class Diff1Inline.init.Opt : Diff1.init.Opt
 ---@field a vcs.File?
@@ -97,7 +106,7 @@ Diff1Inline.symbols = { "b" }
 
 ---@param opt Diff1Inline.init.Opt
 function Diff1Inline:init(opt)
-  self:super(opt)
+  Diff1.init(self, opt)
   self:_set_a_file(opt and opt.a or nil)
   -- Start at 0 so every call site can do a plain `+ 1` without a nil
   -- check, and so capture-then-yield sequences always compare two

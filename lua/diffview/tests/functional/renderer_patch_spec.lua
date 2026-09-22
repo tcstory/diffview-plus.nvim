@@ -1,4 +1,4 @@
-local renderer = require("diffview.renderer")
+local renderer = require("diffview.ui.component_renderer")
 
 describe("renderer patching", function()
   it("updates one row rather than redrawing a 1000-line panel", function()

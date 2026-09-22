@@ -1,7 +1,6 @@
 local lazy = require("diffview.lazy")
 local Window = require("diffview.scene.window").Window
 local Layout = require("diffview.scene.layout").Layout
-local oop = require("diffview.oop")
 
 local Diff1 = lazy.access("diffview.scene.layouts.diff_1", "Diff1") ---@type Diff1|LazyModule
 local Diff3 = lazy.access("diffview.scene.layouts.diff_3", "Diff3") ---@type Diff3|LazyModule
@@ -14,7 +13,17 @@ local M = {}
 ---@field b Window
 ---@field c Window
 ---@field d Window
-local Diff4 = oop.create_class("Diff4", Layout)
+local Diff4 = {}
+Diff4.__index = Diff4
+Diff4.super_class = Layout
+setmetatable(Diff4, {
+  __index = Layout,
+  __call = function(_, ...)
+    local layout = setmetatable({ class = Diff4 }, Diff4)
+    layout:init(...)
+    return layout
+  end,
+})
 
 ---@alias Diff4.WindowSymbol "a"|"b"|"c"|"d"
 
@@ -32,7 +41,7 @@ Diff4.symbols = { "a", "b", "c", "d" }
 
 ---@param opt Diff4.init.Opt
 function Diff4:init(opt)
-  self:super()
+  Layout.init(self)
   self.a = Window({ file = opt.a, id = opt.winid_a })
   self.b = Window({ file = opt.b, id = opt.winid_b })
   self.c = Window({ file = opt.c, id = opt.winid_c })

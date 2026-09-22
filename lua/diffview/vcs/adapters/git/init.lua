@@ -20,7 +20,6 @@ local git_parser = require("diffview.vcs.adapters.git.parser")
 local git_stage = require("diffview.vcs.adapters.git.stage")
 local git_status = require("diffview.vcs.adapters.git.status")
 local lazy = require("diffview.lazy")
-local oop = require("diffview.oop")
 local utils = require("diffview.utils")
 local vcs_utils = require("diffview.vcs.utils")
 local path_builder = require("diffview.vcs.path_args")
@@ -62,7 +61,17 @@ end
 
 ---@class GitAdapter : VCSAdapter
 ---@operator call : GitAdapter
-local GitAdapter = oop.create_class("GitAdapter", VCSAdapter)
+local GitAdapter = {}
+GitAdapter.__index = GitAdapter
+GitAdapter.super_class = VCSAdapter
+setmetatable(GitAdapter, {
+  __index = VCSAdapter,
+  __call = function(_, ...)
+    local adapter = setmetatable({ class = GitAdapter }, GitAdapter)
+    adapter:init(...)
+    return adapter
+  end,
+})
 
 GitAdapter.Rev = GitRev
 GitAdapter.config_key = "git"
@@ -304,7 +313,7 @@ end
 ---@param opt vcs.adapter.VCSAdapter.Opt
 function GitAdapter:init(opt)
   opt = opt or {}
-  self:super(opt)
+  VCSAdapter.init(self)
 
   -- The git dir is normally discovered from the toplevel. When an explicit
   -- `-C` directory is given that resolves to a different git dir than the

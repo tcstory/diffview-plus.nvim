@@ -1,5 +1,4 @@
 local lazy = require("diffview.lazy")
-local oop = require("diffview.oop")
 
 local Diff4Mixed = lazy.access("diffview.scene.layouts.diff_4_mixed", "Diff4Mixed") ---@type Diff4Mixed|LazyModule
 local File = lazy.access("diffview.vcs.file", "File") ---@type vcs.File|LazyModule
@@ -21,13 +20,25 @@ local M = {}
 ---from the filesystem. The `output` window is bound to the real file on
 ---disk via `RevType.LOCAL` so `:write` flushes there; the read-only sides
 ---use `RevType.CUSTOM` with a `get_data` reader.
+local NullDiffViewClass = NullDiffView.__get()
+
 ---@class FileMergeView : NullDiffView
 ---@operator call : FileMergeView
 ---@field output_path string # Absolute path the resolved content writes back to.
 ---@field base_path? string # Absolute path of the common ancestor; nil for 3-way merges.
 ---@field left_path string # Absolute path of OURS / "left" side.
 ---@field right_path string # Absolute path of THEIRS / "right" side.
-local FileMergeView = oop.create_class("FileMergeView", NullDiffView.__get())
+local FileMergeView = { __name = "FileMergeView" }
+FileMergeView.__index = FileMergeView
+FileMergeView.super_class = NullDiffViewClass
+setmetatable(FileMergeView, {
+  __index = NullDiffViewClass,
+  __call = function(_, ...)
+    local view = setmetatable({ class = FileMergeView }, FileMergeView)
+    view:init(...)
+    return view
+  end,
+})
 
 ---@class FileMergeView.init.Opt
 ---@field adapter NullAdapter
@@ -46,7 +57,7 @@ function FileMergeView:init(opt)
   -- DiffView's `left`/`right` are used for the panel header and rev-arg
   -- bookkeeping. We pass the OURS/THEIRS revs here since they correspond
   -- to the visual left and right sides of the diff.
-  self:super({
+  NullDiffViewClass.init(self, {
     adapter = opt.adapter,
     path_args = {},
     rev_arg = nil,

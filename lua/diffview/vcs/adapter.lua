@@ -1,6 +1,5 @@
 local async = require("diffview.async")
 local lazy = require("diffview.lazy")
-local oop = require("diffview.oop")
 
 local AsyncListStream = lazy.access("diffview.stream", "AsyncListStream") ---@type AsyncListStream|LazyModule
 local Job = lazy.access("diffview.runtime.process_task", "ProcessTask") ---@type diffview.ProcessTask|LazyModule
@@ -49,12 +48,39 @@ local M = {}
 ---@field git_override? string[] # Global flags pinning the git dir and work tree when they diverge
 ---@field path_args? string[] # Resolved path arguments
 
----@class VCSAdapter: diffview.Object
+---@class VCSAdapter
+---@field class VCSAdapter
+---@field super_class? VCSAdapter
 ---@field bootstrap vcs.adapter.VCSAdapter.Bootstrap
 ---@field ctx vcs.adapter.VCSAdapter.Ctx
 ---@field flags vcs.adapter.VCSAdapter.Flags
 ---@field capabilities table<vcs.Capability, true>
-local VCSAdapter = oop.create_class("VCSAdapter")
+local VCSAdapter = {}
+VCSAdapter.__index = VCSAdapter
+setmetatable(VCSAdapter, {
+  __call = function(_)
+    local adapter = setmetatable({ class = VCSAdapter }, VCSAdapter)
+    adapter:init()
+    return adapter
+  end,
+})
+
+---@param target table
+---@return boolean
+function VCSAdapter:instanceof(target)
+  local class = self.class
+  while class do
+    if class == target then
+      return true
+    end
+    class = class.super_class
+  end
+  return false
+end
+
+local function abstract()
+  error("Abstract adapter operation must be implemented", 2)
+end
 
 VCSAdapter.Rev = Rev
 VCSAdapter.config_key = nil
@@ -104,7 +130,7 @@ end
 ---@return string[] path_args # Resolved path args
 ---@return string[] top_indicators # Top-level indicators
 function VCSAdapter.get_repo_paths(path_args, cpath)
-  oop.abstract_stub()
+  abstract()
 end
 
 ---Try to find the top-level of a working tree by using the given indicative
@@ -114,7 +140,7 @@ end
 ---@return string? err
 ---@return string toplevel # Absolute path
 function VCSAdapter.find_toplevel(top_indicators)
-  oop.abstract_stub()
+  abstract()
 end
 
 ---@diagnostic enable: unused-local, missing-return
@@ -252,12 +278,12 @@ end
 ---@param rev Rev
 ---@return boolean -- True if the file was binary for the given rev, or it didn't exist.
 function VCSAdapter:is_binary(path, rev)
-  oop.abstract_stub()
+  abstract()
 end
 
 ---Initialize completion parameters
 function VCSAdapter:init_completion()
-  oop.abstract_stub()
+  abstract()
 end
 
 ---Return the adapter's default branch name (e.g., "main", "master"), or nil
@@ -290,7 +316,7 @@ end
 ---@return Rev? left
 ---@return Rev? right
 function VCSAdapter:parse_revs(rev_arg, opt)
-  oop.abstract_stub()
+  abstract()
 end
 
 ---@class RevCompletionSpec
@@ -301,12 +327,12 @@ end
 ---@param opt? RevCompletionSpec
 ---@return string[]
 function VCSAdapter:rev_candidates(arg_lead, opt)
-  oop.abstract_stub()
+  abstract()
 end
 
 ---@return Rev?
 function VCSAdapter:head_rev()
-  oop.abstract_stub()
+  abstract()
 end
 
 ---Get the hash for a file's blob in a given rev.
@@ -314,7 +340,7 @@ end
 ---@param rev_arg string?
 ---@return string?
 function VCSAdapter:file_blob_hash(path, rev_arg)
-  oop.abstract_stub()
+  abstract()
 end
 
 ---Whether `path` exists at `rev_arg`. Cheaper than `file_blob_hash` for
@@ -324,12 +350,12 @@ end
 ---@param rev_arg string
 ---@return boolean
 function VCSAdapter:file_exists_at_rev(path, rev_arg)
-  oop.abstract_stub()
+  abstract()
 end
 
 ---@return string[] # path to binary for VCS command
 function VCSAdapter:get_command()
-  oop.abstract_stub()
+  abstract()
 end
 
 ---@diagnostic enable: unused-local, missing-return
@@ -505,7 +531,7 @@ end
 ---@param rev Rev?
 ---@return string[] args to show commit content
 function VCSAdapter:get_show_args(path, rev)
-  oop.abstract_stub()
+  abstract()
 end
 
 ---@param args string[]
@@ -513,7 +539,7 @@ end
 ---@return string[] args to show commit log message
 ---@diagnostic disable-next-line: unused-local
 function VCSAdapter:get_log_args(args, paths)
-  oop.abstract_stub()
+  abstract()
 end
 
 ---@class vcs.MergeContext
@@ -523,7 +549,7 @@ end
 
 ---@return vcs.MergeContext?
 function VCSAdapter:get_merge_context()
-  oop.abstract_stub()
+  abstract()
 end
 
 ---@param paths string[]?
@@ -551,14 +577,14 @@ end
 ---@param argo ArgObject
 ---@return string[] # Options to show file history
 function VCSAdapter:file_history_options(range, paths, argo)
-  oop.abstract_stub()
+  abstract()
 end
 
 ---@param self VCSAdapter
 ---@param out_stream AsyncListStream
 ---@param opt vcs.adapter.FileHistoryWorkerSpec
 VCSAdapter.file_history_worker = async.void(function(self, out_stream, opt)
-  oop.abstract_stub()
+  abstract()
 end)
 
 ---@diagnostic enable: unused-local, missing-return
@@ -585,7 +611,7 @@ end
 ---@param right Rev
 ---@return string[]
 function VCSAdapter:rev_to_args(left, right)
-  oop.abstract_stub()
+  abstract()
 end
 
 ---Refresh rev endpoints for an existing view.
@@ -620,7 +646,7 @@ end
 ---@param commit string
 ---@return string? Command to undo the restore
 function VCSAdapter:restore_file(path, kind, commit)
-  oop.abstract_stub()
+  abstract()
 end
 
 ---Whether the adapter has a staging index (git/hg: true, jj: false). Consumers
@@ -635,20 +661,20 @@ end
 ---@param paths string[]
 ---@return boolean # add was successful
 function VCSAdapter:add_files(paths)
-  oop.abstract_stub()
+  abstract()
 end
 
 ---Reset file(s)
 ---@param paths string[]?
 ---@return boolean # reset was successful
 function VCSAdapter:reset_files(paths)
-  oop.abstract_stub()
+  abstract()
 end
 
 ---@param argo ArgObject
 ---@return { left: Rev, right: Rev, options: DiffViewOptions }?
 function VCSAdapter:diffview_options(argo)
-  oop.abstract_stub()
+  abstract()
 end
 
 ---@class VCSAdapter.show_untracked.Opt
@@ -659,7 +685,7 @@ end
 ---@param opt? VCSAdapter.show_untracked.Opt
 ---@return boolean
 function VCSAdapter:show_untracked(opt)
-  oop.abstract_stub()
+  abstract()
 end
 
 ---Restore file
@@ -670,14 +696,14 @@ end
 ---@return boolean success
 ---@return string? undo # If the adapter supports it: a command that will undo the restoration.
 VCSAdapter.file_restore = async.void(function(self, path, kind, commit)
-  oop.abstract_stub()
+  abstract()
 end)
 
 ---Update the index entry for a given file with the contents of an index buffer.
 ---@param file vcs.File
 ---@return boolean success
 function VCSAdapter:stage_index_file(file)
-  oop.abstract_stub()
+  abstract()
 end
 
 ---@param self VCSAdapter
@@ -688,7 +714,7 @@ end
 ---@param opt vcs.adapter.LayoutOpt
 ---@param callback function
 VCSAdapter.tracked_files = async.wrap(function(self, left, right, args, kind, opt, callback)
-  oop.abstract_stub()
+  abstract()
 end)
 
 ---@param self VCSAdapter
@@ -697,7 +723,7 @@ end)
 ---@param opt vcs.adapter.LayoutOpt
 ---@param callback? function
 VCSAdapter.untracked_files = async.wrap(function(self, left, right, opt, callback)
-  oop.abstract_stub()
+  abstract()
 end)
 
 ---@diagnostic enable: unused-local, missing-return
