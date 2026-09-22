@@ -1,5 +1,4 @@
 local lazy = require("diffview.lazy")
-local oop = require("diffview.oop")
 local Commit = require("diffview.vcs.commit").Commit
 local RevType = require("diffview.vcs.rev").RevType
 local utils = require("diffview.utils")
@@ -7,12 +6,21 @@ local utils = require("diffview.utils")
 local M = {}
 
 ---@class P4Commit : Commit
-local P4Commit = oop.create_class("P4Commit", Commit)
+local P4Commit = {}
+P4Commit.__index = P4Commit
+setmetatable(P4Commit, {
+  __index = Commit,
+  __call = function(_, ...)
+    local commit = setmetatable({}, P4Commit)
+    commit:init(...)
+    return commit
+  end,
+})
 
 ---P4Commit constructor
 ---@param opt table
 function P4Commit:init(opt)
-  self:super(opt) -- Calls base Commit init
+  Commit.init(self, opt)
 
   -- Perforce describe output gives Unix timestamp directly.
   -- Timezone handling might require parsing the date string or relying on system locale.

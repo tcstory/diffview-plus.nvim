@@ -1,6 +1,5 @@
 local async = require("diffview.async")
 local lazy = require("diffview.lazy")
-local oop = require("diffview.oop")
 
 local control = lazy.require("diffview.control") ---@module "diffview.control"
 local utils = lazy.require("diffview.utils") ---@module "diffview.utils"
@@ -10,15 +9,27 @@ local await = async.await
 local M = {}
 
 ---@generic T
----@class Stream<T> : diffview.Object
+---@class Stream<T>
 ---@operator call : Stream
 ---@field src Stream.SrcFunc
 ---@field head integer
 ---@field drained boolean
-local Stream = oop.create_class("Stream")
+local Stream = {}
+Stream.__index = Stream
+setmetatable(Stream, {
+  __call = function(_, ...)
+    local stream = setmetatable({}, Stream)
+    stream:init(...)
+    return stream
+  end,
+})
 M.Stream = Stream
 
-Stream.EOF = oop.Symbol("Stream.EOF")
+Stream.EOF = setmetatable({}, {
+  __tostring = function()
+    return "<Symbol('Stream.EOF')>"
+  end,
+})
 
 ---@alias Stream.SrcFunc fun(): (item: unknown, continue: boolean?)
 
@@ -179,7 +190,16 @@ end
 
 ---@class AsyncStream : Stream, Waitable
 ---@operator call : AsyncStream
-local AsyncStream = oop.create_class("AsyncStream", Stream)
+local AsyncStream = {}
+AsyncStream.__index = AsyncStream
+setmetatable(AsyncStream, {
+  __index = Stream,
+  __call = function(_, ...)
+    local stream = setmetatable({}, AsyncStream)
+    Stream.init(stream, ...)
+    return stream
+  end,
+})
 M.AsyncStream = AsyncStream
 
 AsyncStream.next = async.sync_wrap(
@@ -230,7 +250,16 @@ utils.add_reverse_lookup(StreamState)
 ---@field private close_listeners? (fun(...))[]
 ---@field private post_close_listeners (fun())[]
 ---@field private on_close_args? unknown[]
-local AsyncListStream = oop.create_class("AsyncListStream", AsyncStream)
+local AsyncListStream = {}
+AsyncListStream.__index = AsyncListStream
+setmetatable(AsyncListStream, {
+  __index = AsyncStream,
+  __call = function(_, ...)
+    local stream = setmetatable({}, AsyncListStream)
+    stream:init(...)
+    return stream
+  end,
+})
 M.AsyncListStream = AsyncListStream
 
 ---@alias AsyncListStream.EventKind "on_close"|"on_post_close"
@@ -255,7 +284,7 @@ function AsyncListStream:init(opt)
     callback(self.data[self.head])
   end)
 
-  self:super(src)
+  Stream.init(self, src)
 end
 
 ---Append the given items to the end of the stream. Pushing `Stream.EOF` will

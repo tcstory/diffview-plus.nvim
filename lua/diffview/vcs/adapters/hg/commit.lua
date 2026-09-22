@@ -1,15 +1,23 @@
 local lazy = require("diffview.lazy")
-local oop = require("diffview.oop")
 local utils = require("diffview.utils")
 local Commit = require("diffview.vcs.commit").Commit
 
 local M = {}
 
 ---@class HgCommit : Commit
-local HgCommit = oop.create_class("HgCommit", Commit)
+local HgCommit = {}
+HgCommit.__index = HgCommit
+setmetatable(HgCommit, {
+  __index = Commit,
+  __call = function(_, ...)
+    local commit = setmetatable({}, HgCommit)
+    commit:init(...)
+    return commit
+  end,
+})
 
 function HgCommit:init(opt)
-  self:super(opt)
+  Commit.init(self, opt)
 
   if opt.time_offset then
     self.time_offset = HgCommit.parse_time_offset(opt.time_offset)

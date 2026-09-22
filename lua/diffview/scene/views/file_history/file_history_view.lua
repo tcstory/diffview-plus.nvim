@@ -328,7 +328,7 @@ function FileHistoryView:_install_pinned_cursor_follower()
     end
 
     local target
-    if LogEntry.__get():ancestorof(item) then
+    if LogEntry.__get().is(item) then
       ---@cast item LogEntry
       target = self:_resolve_pinned_target(item)
     else
@@ -504,7 +504,7 @@ function FileHistoryView:infer_cur_file()
   if self.panel:is_focused() then
     local item = self.panel:get_item_at_cursor()
 
-    if LogEntry.__get():ancestorof(item) then
+    if LogEntry.__get().is(item) then
       ---@cast item LogEntry
       -- In pinned mode the displayed diff is whichever FileEntry
       -- `_resolve_pinned_target` picked (possibly a transient overlay), so

@@ -1,12 +1,11 @@
 local lazy = require("diffview.lazy")
-local oop = require("diffview.oop")
 
 local FileEntry = lazy.access("diffview.scene.file_entry", "FileEntry") --[[@as FileEntry ]]
 local utils = lazy.require("diffview.utils") ---@module "diffview.utils"
 
 local M = {}
 
----@class LogEntry : diffview.Object
+---@class LogEntry
 ---@operator call : LogEntry
 ---@field path_args string[]
 ---@field commit Commit
@@ -19,7 +18,21 @@ local M = {}
 ---@field is_pushed boolean Whether this commit is reachable from a remote-tracking ref (i.e. has been pushed).
 ---@field is_merged boolean Whether this commit is reachable from a `main` or `master` branch (local or remote-tracking). For Git the set of trunk branch names is hard-coded; for jj it is resolved via `trunk()`. Only populated when `subject_highlight = "merge_aware"` on adapters that compute it (Git, jj); otherwise `false`.
 ---@field _pin_overlays? table<string, FileEntry> Cache of transient FileEntry overlays keyed by `pinned_path`, populated when a pinned file isn't touched by this commit.
-local LogEntry = oop.create_class("LogEntry")
+local LogEntry = {}
+LogEntry.__index = LogEntry
+setmetatable(LogEntry, {
+  __call = function(_, ...)
+    local entry = setmetatable({}, LogEntry)
+    entry:init(...)
+    return entry
+  end,
+})
+
+---@param value any
+---@return boolean
+function LogEntry.is(value)
+  return type(value) == "table" and getmetatable(value) == LogEntry
+end
 
 function LogEntry:init(opt)
   self.path_args = opt.path_args

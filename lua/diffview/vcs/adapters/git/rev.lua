@@ -1,11 +1,20 @@
-local oop = require("diffview.oop")
 local Rev = require("diffview.vcs.rev").Rev
 local RevType = require("diffview.vcs.rev").RevType
 
 local M = {}
 
 ---@class GitRev : Rev
-local GitRev = oop.create_class("GitRev", Rev)
+local GitRev = {}
+GitRev.__index = GitRev
+GitRev.__tostring = Rev.__tostring
+setmetatable(GitRev, {
+  __index = Rev,
+  __call = function(_, ...)
+    local rev = setmetatable({}, GitRev)
+    rev:init(...)
+    return rev
+  end,
+})
 
 -- The special SHA for git's empty tree.
 GitRev.NULL_TREE_SHA = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"

@@ -638,7 +638,7 @@ function FileHistoryPanel:get_log_entry_at_cursor()
     return
   end
 
-  if item:instanceof(LogEntry.__get()) then
+  if LogEntry.__get().is(item) then
     return item --[[@as LogEntry ]]
   end
 
@@ -661,7 +661,7 @@ end
 function FileHistoryPanel:set_entry_from_file(item)
   local file = self.cur_item[2]
 
-  if item:instanceof(LogEntry.__get()) then
+  if LogEntry.__get().is(item) then
     self:set_cur_item({ item, item.files[1] })
   else
     local entry = self:find_entry(file)
@@ -804,7 +804,7 @@ function FileHistoryPanel:highlight_item(item)
   end
 
   local target_row
-  if item:instanceof(LogEntry.__get()) then
+  if LogEntry.__get().is(item) then
     ---@cast item LogEntry
     for _, comp_struct in ipairs(self.components.log.entries) do
       if comp_struct.comp.context == item then

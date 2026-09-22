@@ -1,5 +1,4 @@
 local lazy = require("diffview.lazy")
-local oop = require("diffview.oop")
 
 local Commit = lazy.access("diffview.vcs.commit", "Commit") ---@type Commit|LazyModule
 local RevType = lazy.access("diffview.vcs.rev", "RevType") ---@type RevType|LazyModule
@@ -9,10 +8,20 @@ local M = {}
 
 ---@class GitCommit : Commit
 ---@field reflog_selector? string
-local GitCommit = oop.create_class("GitCommit", Commit.__get())
+local CommitClass = Commit.__get()
+local GitCommit = {}
+GitCommit.__index = GitCommit
+setmetatable(GitCommit, {
+  __index = CommitClass,
+  __call = function(_, ...)
+    local commit = setmetatable({}, GitCommit)
+    commit:init(...)
+    return commit
+  end,
+})
 
 function GitCommit:init(opt)
-  self:super(opt)
+  CommitClass.init(self, opt)
 
   self.reflog_selector = opt.reflog_selector ~= "" and opt.reflog_selector or nil
 

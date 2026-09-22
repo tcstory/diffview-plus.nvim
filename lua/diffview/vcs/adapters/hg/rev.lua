@@ -1,11 +1,20 @@
-local oop = require("diffview.oop")
 local Rev = require("diffview.vcs.rev").Rev
 local RevType = require("diffview.vcs.rev").RevType
 
 local M = {}
 
 ---@class HgRev : Rev
-local HgRev = oop.create_class("HgRev", Rev)
+local HgRev = {}
+HgRev.__index = HgRev
+HgRev.__tostring = Rev.__tostring
+setmetatable(HgRev, {
+  __index = Rev,
+  __call = function(_, ...)
+    local rev = setmetatable({}, HgRev)
+    rev:init(...)
+    return rev
+  end,
+})
 
 HgRev.NULL_TREE_SHA = "0000000000000000000000000000000000000000"
 

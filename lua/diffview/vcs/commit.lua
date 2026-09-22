@@ -1,12 +1,11 @@
 local lazy = require("diffview.lazy")
-local oop = require("diffview.oop")
 
 local RevType = lazy.access("diffview.vcs.rev", "RevType") ---@type RevType|LazyModule
 local utils = lazy.require("diffview.utils") ---@module "diffview.utils"
 
 local M = {}
 
----@class Commit : diffview.Object
+---@class Commit
 ---@field hash string
 ---@field author string
 ---@field time number
@@ -18,7 +17,15 @@ local M = {}
 ---@field subject string
 ---@field body string
 ---@field diff? diff.FileEntry[]
-local Commit = oop.create_class("Commit")
+local Commit = {}
+Commit.__index = Commit
+setmetatable(Commit, {
+  __call = function(_, ...)
+    local commit = setmetatable({}, Commit)
+    commit:init(...)
+    return commit
+  end,
+})
 
 function Commit:init(opt)
   self.hash = opt.hash
@@ -37,7 +44,7 @@ end
 ---@param adapter VCSAdapter
 ---@return Commit?
 function Commit.from_rev_arg(rev_arg, adapter)
-  oop.abstract_stub()
+  error("Abstract function 'Commit.from_rev_arg' must be implemented", 2)
 end
 
 ---@diagnostic enable: unused-local, missing-return

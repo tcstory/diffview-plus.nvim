@@ -1,4 +1,3 @@
-local oop = require("diffview.oop")
 local utils = require("diffview.utils")
 local api = vim.api
 
@@ -28,7 +27,7 @@ M.last_draw_time = 0
 ---@field context? table
 ---@field [integer] CompSchema
 
----@class RenderComponent : diffview.Object
+---@class RenderComponent
 ---@field name string
 ---@field context? table
 ---@field parent RenderComponent
@@ -40,7 +39,15 @@ M.last_draw_time = 0
 ---@field lend integer Exclusive
 ---@field height integer
 ---@field data_root RenderData
-local RenderComponent = oop.create_class("RenderComponent")
+local RenderComponent = {}
+RenderComponent.__index = RenderComponent
+setmetatable(RenderComponent, {
+  __call = function(_, ...)
+    local component = setmetatable({}, RenderComponent)
+    component:init(...)
+    return component
+  end,
+})
 
 ---RenderComponent constructor.
 function RenderComponent:init(name)
@@ -279,7 +286,7 @@ function RenderComponent:pretty_print()
   recurse(0, self)
 end
 
----@class RenderData : diffview.Object
+---@class RenderData
 ---@field lines string[]
 ---@field hl renderer.HlList
 ---@field components RenderComponent[]
@@ -287,7 +294,15 @@ end
 ---@field rendered_lines string[]
 ---@field rendered_hl table<integer, renderer.HlData[]>
 ---@field last_patch? { start_row: integer, old_end_row: integer, new_end_row: integer, lines_written: integer, extmarks_written: integer }
-local RenderData = oop.create_class("RenderData")
+local RenderData = {}
+RenderData.__index = RenderData
+setmetatable(RenderData, {
+  __call = function(_, ...)
+    local data = setmetatable({}, RenderData)
+    data:init(...)
+    return data
+  end,
+})
 
 ---RenderData constructor.
 function RenderData:init(ns_name)

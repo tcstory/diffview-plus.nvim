@@ -1,5 +1,4 @@
 local lazy = require("diffview.lazy")
-local oop = require("diffview.oop")
 
 local utils = lazy.require("diffview.utils") ---@module "diffview.utils"
 
@@ -19,7 +18,15 @@ local M = {}
 ---@field display_fmt string
 ---@field select? string[]
 ---@field completion? string|FlagOption.CompletionWrapper
-local FlagOption = oop.create_class("FlagOption")
+local FlagOption = {}
+FlagOption.__index = FlagOption
+setmetatable(FlagOption, {
+  __call = function(_, ...)
+    local option = setmetatable({}, FlagOption)
+    option:init(...)
+    return option
+  end,
+})
 
 ---@class FlagOption.init.Opt
 ---@field flag_name string

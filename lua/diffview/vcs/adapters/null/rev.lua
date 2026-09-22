@@ -1,18 +1,27 @@
-local oop = require("diffview.oop")
 local Rev = require("diffview.vcs.rev").Rev
 local RevType = require("diffview.vcs.rev").RevType
 
 local M = {}
 
 ---@class NullRev : Rev
-local NullRev = oop.create_class("NullRev", Rev)
+local NullRev = {}
+NullRev.__index = NullRev
+NullRev.__tostring = Rev.__tostring
+setmetatable(NullRev, {
+  __index = Rev,
+  __call = function(_, ...)
+    local rev = setmetatable({}, NullRev)
+    rev:init(...)
+    return rev
+  end,
+})
 
 ---NullRev constructor
 ---@param rev_type RevType
 ---@param revision? string|number
 ---@param track_head? boolean
 function NullRev:init(rev_type, revision, track_head)
-  self:super(rev_type, revision, track_head)
+  Rev.init(self, rev_type, revision, track_head)
 end
 
 ---@param rev_from NullRev|string

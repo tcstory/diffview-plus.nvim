@@ -227,12 +227,12 @@ deletion is expected.
 
 | Field | Value |
 |-------|-------|
-| **Status** | ⬜ Retained after live-caller audit |
-| **Files** | `lua/diffview/oop.lua`, all classes that call `ClassName:extend()` |
+| **Status** | 🟨 Removal in progress |
+| **Files** | `lua/diffview/oop.lua` and the remaining inherited scene, panel, layout, and adapter families |
 | **Reason** | The OOP framework predates Neovim's `vim.iter`, LuaLS annotations and modern Lua idioms.  It adds a non-standard class mechanism that is invisible to LuaLS and confuses new contributors.  The refactor uses plain Lua tables and `---@class` annotations throughout. |
 | **Replacement** | Plain Lua modules with LuaLS `---@class` / `---@field` annotations |
-| **Phase** | Post-refactor vertical slices; it is not compatibility code |
-| **Deleted in** | —; 82 live class declarations remain, so deletion would break scene/adapter dispatch |
+| **Phase** | Phase 10 vertical slices |
+| **Deleted in** | —; runtime primitives, value objects, streams, and renderer data types now use plain tables; 43 inherited declarations remain |
 
 ### Self-built coroutine scheduler (`async.lua`, `Waitable`)
 

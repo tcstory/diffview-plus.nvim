@@ -1,14 +1,22 @@
-local oop = require("diffview.oop")
 local Commit = require("diffview.vcs.commit").Commit
 
 local M = {}
 
 ---@class JjCommit : Commit
-local JjCommit = oop.create_class("JjCommit", Commit)
+local JjCommit = {}
+JjCommit.__index = JjCommit
+setmetatable(JjCommit, {
+  __index = Commit,
+  __call = function(_, ...)
+    local commit = setmetatable({}, JjCommit)
+    commit:init(...)
+    return commit
+  end,
+})
 
 ---@param opt table
 function JjCommit:init(opt)
-  self:super(opt)
+  Commit.init(self, opt)
 
   -- jj's `author.timestamp().format("%s")` is already an absolute UTC epoch,
   -- so unlike `HgCommit` we never subtract `time_offset` from `time` -- the

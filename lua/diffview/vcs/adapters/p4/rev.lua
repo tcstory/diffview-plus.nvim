@@ -1,11 +1,20 @@
-local oop = require("diffview.oop")
 local Rev = require("diffview.vcs.rev").Rev
 local RevType = require("diffview.vcs.rev").RevType
 
 local M = {}
 
 ---@class P4Rev : Rev
-local P4Rev = oop.create_class("P4Rev", Rev)
+local P4Rev = {}
+P4Rev.__index = P4Rev
+P4Rev.__tostring = Rev.__tostring
+setmetatable(P4Rev, {
+  __index = Rev,
+  __call = function(_, ...)
+    local rev = setmetatable({}, P4Rev)
+    rev:init(...)
+    return rev
+  end,
+})
 
 -- Perforce uses #none or @0 for non-existent revisions
 P4Rev.NULL_TREE_SHA = "#none" -- Or perhaps @0 is better? Let's stick with #none for clarity.
@@ -21,7 +30,7 @@ function P4Rev:init(rev_type, revision, track_head)
     revision = "@" .. tostring(revision)
   end
 
-  self:super(rev_type, revision, track_head)
+  Rev.init(self, rev_type, revision, track_head)
 end
 
 ---@param rev_from P4Rev|string

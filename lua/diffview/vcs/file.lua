@@ -1,6 +1,5 @@
 local async = require("diffview.async")
 local lazy = require("diffview.lazy")
-local oop = require("diffview.oop")
 
 local GitRev = lazy.access("diffview.vcs.adapters.git.rev", "GitRev") ---@type GitRev|LazyModule
 local RevType = lazy.access("diffview.vcs.rev", "RevType") ---@type RevType|LazyModule
@@ -20,7 +19,7 @@ local M = {}
 
 ---@alias git.FileDataProducer fun(kind: vcs.FileKind, path: string, pos: "left"|"right"): string[]
 
----@class vcs.File : diffview.Object
+---@class vcs.File
 ---@field adapter GitAdapter
 ---@field path string
 ---@field absolute_path string
@@ -49,7 +48,15 @@ local M = {}
 ---@field _context_state_saved? boolean # Whether the two saved values above are populated.
 ---@field package _loading? Signal # Owned by the in-flight `create_buffer` call; concurrent callers await it before reading `bufnr`.
 ---@field package _loading_error? string # Error from the most recent failed `create_buffer`, exposed to concurrent waiters once the signal fires.
-local File = oop.create_class("vcs.File")
+local File = {}
+File.__index = File
+setmetatable(File, {
+  __call = function(_, ...)
+    local file = setmetatable({}, File)
+    file:init(...)
+    return file
+  end,
+})
 
 ---@type table<integer, vcs.File.AttachState>
 File.attached = {}

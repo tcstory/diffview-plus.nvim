@@ -1,28 +1,38 @@
-local oop = require("diffview.oop")
-
 local M = {}
 
 ---@enum RevType
-local RevType = oop.enum({
+local RevType = {
   LOCAL = 1,
   COMMIT = 2,
   STAGE = 3,
   CUSTOM = 4,
-})
+  [1] = "LOCAL",
+  [2] = "COMMIT",
+  [3] = "STAGE",
+  [4] = "CUSTOM",
+}
 
 ---@alias RevRange { first: Rev, last: Rev }
 
----@class Rev : diffview.Object
+---@class Rev
 ---@field type RevType
 ---@field commit? string A commit SHA.
 ---@field stage? integer A stage number.
 ---@field track_head boolean If true, indicates that the rev should be updated when HEAD changes.
 ---@field pin_local_synthetic? boolean Set on the a-side rev of the synthetic top-of-history entry built by `VCSAdapter:build_local_log_entry`. Tells the pinned `Diff2` layout's `should_null` to fall back to standard parent-vs-child semantics for that entry, since revs.a is HEAD (not the commit being browsed).
-local Rev = oop.create_class("Rev")
+local Rev = {}
+Rev.__index = Rev
+setmetatable(Rev, {
+  __call = function(_, ...)
+    local rev = setmetatable({}, Rev)
+    rev:init(...)
+    return rev
+  end,
+})
 
 ---Rev constructor
 ---@param rev_type RevType
----@param revision string|number Commit SHA or stage number.
+---@param revision? string|number Commit SHA or stage number.
 ---@param track_head? boolean
 function Rev:init(rev_type, revision, track_head)
   local t = type(revision)
@@ -72,39 +82,39 @@ end
 ---@param rev_to? Rev|string
 ---@return string?
 function Rev.to_range(rev_from, rev_to)
-  oop.abstract_stub()
+  error("Abstract function 'Rev.to_range' must be implemented", 2)
 end
 
 ---@param name string
 ---@param adapter? VCSAdapter
 ---@return Rev?
 function Rev.from_name(name, adapter)
-  oop.abstract_stub()
+  error("Abstract function 'Rev.from_name' must be implemented", 2)
 end
 
 ---@param adapter VCSAdapter
 ---@return Rev?
 function Rev.earliest_commit(adapter)
-  oop.abstract_stub()
+  error("Abstract function 'Rev.earliest_commit' must be implemented", 2)
 end
 
 ---Create a new commit rev with the special empty tree SHA.
 ---@return Rev
 function Rev.new_null_tree()
-  oop.abstract_stub()
+  error("Abstract function 'Rev.new_null_tree' must be implemented", 2)
 end
 
 ---Determine if this rev is currently the head.
 ---@param adapter VCSAdapter
 ---@return boolean?
 function Rev:is_head(adapter)
-  oop.abstract_stub()
+  error("Abstract method 'Rev:is_head' must be implemented", 2)
 end
 
 ---@param abbrev_len? integer
 ---@return string
 function Rev:object_name(abbrev_len)
-  oop.abstract_stub()
+  error("Abstract method 'Rev:object_name' must be implemented", 2)
 end
 
 ---@diagnostic enable: unused-local, missing-return

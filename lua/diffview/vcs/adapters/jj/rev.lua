@@ -1,11 +1,20 @@
-local oop = require("diffview.oop")
 local Rev = require("diffview.vcs.rev").Rev
 local RevType = require("diffview.vcs.rev").RevType
 
 local M = {}
 
 ---@class JjRev : Rev
-local JjRev = oop.create_class("JjRev", Rev)
+local JjRev = {}
+JjRev.__index = JjRev
+JjRev.__tostring = Rev.__tostring
+setmetatable(JjRev, {
+  __index = Rev,
+  __call = function(_, ...)
+    local rev = setmetatable({}, JjRev)
+    rev:init(...)
+    return rev
+  end,
+})
 
 -- 40-hex-zero commit_id emitted by jj for the null tree (added by the
 -- git-backend for the empty root parent). Used by the null-tree Rev that
@@ -21,7 +30,7 @@ JjRev.NULL_CHANGE_ID = "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
 ---@param revision? string|number
 ---@param track_head? boolean
 function JjRev:init(rev_type, revision, track_head)
-  self:super(rev_type, revision, track_head)
+  Rev.init(self, rev_type, revision, track_head)
 end
 
 ---@return JjRev
