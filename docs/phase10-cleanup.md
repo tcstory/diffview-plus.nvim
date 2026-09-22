@@ -20,3 +20,10 @@ and the scene renderer still have live production callers. They are not
 compatibility modules and are therefore retained until their callers can be
 migrated as independent vertical slices. Keeping an active core is preferable
 to relabeling it as dead code and breaking view dispatch.
+
+The first of those slices introduced `runtime/effect_scope.lua` and made every
+`ViewShell` own one scope. Index watchers and file-history debounce handles now
+register explicit disposers there. The same slice removed the OOP dependency
+from async/control/event primitives and independent utility types; inherited
+scene, renderer, stream, and adapter families remain tracked in the deletion
+ledger.

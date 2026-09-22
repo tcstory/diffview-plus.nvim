@@ -110,11 +110,8 @@ function FileHistoryView:close()
 
     -- Cancel any pending debounced fire so a `CursorMoved` that already
     -- queued a `vim.schedule` callback can't run after teardown begins.
-    -- Releasing the timer handle is deferred until after `super:close()`
-    -- has destroyed the panel and unsubscribed the autocmd: the wrapper
-    -- restarts the timer on every invocation, so a `CursorMoved`
-    -- reaching a still-subscribed listener after the timer was closed
-    -- would error on the closed uv handle.
+    -- Releasing the timer handle is owned by the view EffectScope after
+    -- `super:close()` destroys the panel and unsubscribes the autocmd.
     if self._pinned_cursor_follow then
       self._pinned_cursor_follow:cancel()
     end
@@ -150,12 +147,7 @@ function FileHistoryView:close()
     self.commit_log_panel:destroy()
     FileHistoryView.super_class.close(self)
 
-    -- `super:close()` destroyed the panel and unsubscribed the
-    -- `CursorMoved` listener; the timer handle is now safe to release.
-    if self._pinned_cursor_follow then
-      self._pinned_cursor_follow:close()
-      self._pinned_cursor_follow = nil
-    end
+    self._pinned_cursor_follow = nil
   end
 end
 
@@ -356,6 +348,7 @@ function FileHistoryView:_install_pinned_cursor_follower()
     -- row when the previous entry gets folded.
     self:set_file(target, false, true)
   end)
+  self.effects:own(self._pinned_cursor_follow)
 
   self.panel:on_autocmd("CursorMoved", {
     callback = self._pinned_cursor_follow --[[@as function ]],

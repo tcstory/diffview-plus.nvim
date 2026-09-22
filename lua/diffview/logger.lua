@@ -1,6 +1,5 @@
 local async = require("diffview.async")
 local lazy = require("diffview.lazy")
-local oop = require("diffview.oop")
 
 local Mock = lazy.access("diffview.mock", "Mock") ---@type Mock|LazyModule
 local Semaphore = lazy.access("diffview.control", "Semaphore") ---@type Semaphore|LazyModule
@@ -74,7 +73,7 @@ end
 ---@field time Logger.Time
 ---@field label string
 
----@class Logger : diffview.Object
+---@class Logger
 ---@operator call : Logger
 ---@field private outfile_status Logger.OutfileStatus
 ---@field private level integer # Max level. Messages of higher level will be ignored. NOTE: Higher level -> lower severity.
@@ -103,7 +102,15 @@ end
 ---@field lazy_warn Logger.LazyLogFunc
 ---@field lazy_error Logger.LazyLogFunc
 ---@field lazy_fatal Logger.LazyLogFunc
-local Logger = oop.create_class("Logger")
+local Logger = {}
+Logger.__index = Logger
+setmetatable(Logger, {
+  __call = function(_, opt)
+    local logger = setmetatable({}, Logger)
+    logger:init(opt)
+    return logger
+  end,
+})
 
 ---@enum Logger.OutfileStatus
 Logger.OutfileStatus = {
@@ -114,14 +121,15 @@ Logger.OutfileStatus = {
 utils.add_reverse_lookup(Logger.OutfileStatus)
 
 ---@enum Logger.LogLevels
-Logger.LogLevels = oop.enum({
+Logger.LogLevels = {
   fatal = 1,
   error = 2,
   warn = 3,
   info = 4,
   debug = 5,
   trace = 6,
-})
+}
+utils.add_reverse_lookup(Logger.LogLevels)
 
 Logger.mock = Mock()
 

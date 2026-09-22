@@ -1,5 +1,4 @@
 local ffi = require("diffview.ffi")
-local oop = require("diffview.oop")
 
 local fmt = string.format
 local uv = vim.uv
@@ -68,14 +67,15 @@ local function current_thread()
   end
 end
 
----@class Waitable : diffview.Object
-local Waitable = oop.create_class("Waitable")
+---@class Waitable
+local Waitable = {}
+Waitable.__index = Waitable
 M.Waitable = Waitable
 
 ---@abstract
 ---@return any ... # Any values returned by the waitable
 function Waitable:await()
-  oop.abstract_stub()
+  error("Abstract method 'Waitable:await' must be implemented", 2)
 end
 
 ---Schedule a callback to be invoked when this waitable has settled.
@@ -100,7 +100,17 @@ end
 ---@field package awaiting_cb boolean
 ---@field package done boolean
 ---@field package has_raised boolean # `true` if this future has raised an error.
-local Future = oop.create_class("Future", Waitable)
+local Future = setmetatable({}, { __index = Waitable })
+Future.__index = Future
+
+setmetatable(Future, {
+  __index = Waitable,
+  __call = function(_, opt)
+    local future = setmetatable({}, Future)
+    future:init(opt)
+    return future
+  end,
+})
 
 function Future:init(opt)
   opt = opt or {}

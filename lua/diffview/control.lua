@@ -1,5 +1,4 @@
 local lazy = require("diffview.lazy")
-local oop = require("diffview.oop")
 local async = require("diffview.async")
 
 local utils = lazy.require("diffview.utils") ---@module "diffview.utils"
@@ -8,9 +7,28 @@ local await = async.await
 
 local M = {}
 
+---Create a callable plain-table type. The optional base is used only for
+---method lookup; no repository OOP metadata or runtime type checks are added.
+---@param base? table
+---@return table
+local function type_table(base)
+  local cls = {}
+  cls.__index = cls
+  return setmetatable(cls, {
+    __index = base,
+    __call = function(_, ...)
+      local value = setmetatable({}, cls)
+      if value.init then
+        value:init(...)
+      end
+      return value
+    end,
+  })
+end
+
 ---@class Condvar : Waitable
 ---@operator call : Condvar
-local Condvar = oop.create_class("Condvar", async.Waitable)
+local Condvar = type_table(async.Waitable)
 M.Condvar = Condvar
 
 function Condvar:init()
@@ -42,7 +60,7 @@ end
 ---@class SignalConsumer : Waitable
 ---@operator call : SignalConsumer
 ---@field package parent Signal
-local SignalConsumer = oop.create_class("SignalConsumer", async.Waitable)
+local SignalConsumer = type_table(async.Waitable)
 
 function SignalConsumer:init(parent)
   self.parent = parent
@@ -79,7 +97,7 @@ end
 ---@field package emitted boolean
 ---@field package cond Condvar
 ---@field package listeners (fun(signal: Signal))[]
-local Signal = oop.create_class("Signal", async.Waitable)
+local Signal = type_table(async.Waitable)
 M.Signal = Signal
 
 function Signal:init(name)
@@ -147,7 +165,7 @@ end
 ---@class WorkPool : Waitable
 ---@operator call : WorkPool
 ---@field package workers table<Signal, boolean>
-local WorkPool = oop.create_class("WorkPool", async.Waitable)
+local WorkPool = type_table(async.Waitable)
 M.WorkPool = WorkPool
 
 function WorkPool:init()
@@ -188,7 +206,7 @@ end)
 ---@class Permit : diffview.Object
 ---@operator call : Permit
 ---@field parent Semaphore
-local Permit = oop.create_class("Permit")
+local Permit = type_table()
 
 function Permit:init(opt)
   self.parent = opt.parent
@@ -212,7 +230,7 @@ end
 ---@field initial_count integer
 ---@field permit_count integer
 ---@field queue fun(p: Permit)[]
-local Semaphore = oop.create_class("Semaphore")
+local Semaphore = type_table()
 M.Semaphore = Semaphore
 
 function Semaphore:init(permit_count)
@@ -255,7 +273,7 @@ end)
 ---@field sem Semaphore
 ---@field condvar Condvar
 ---@field count_down fun(self: CountDownLatch)
-local CountDownLatch = oop.create_class("CountDownLatch", async.Waitable)
+local CountDownLatch = type_table(async.Waitable)
 M.CountDownLatch = CountDownLatch
 
 function CountDownLatch:init(count)

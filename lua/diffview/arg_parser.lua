@@ -1,5 +1,4 @@
 local lazy = require("diffview.lazy")
-local oop = require("diffview.oop")
 
 local utils = lazy.require("diffview.utils") ---@module "diffview.utils"
 
@@ -8,11 +7,19 @@ local M = {}
 local short_flag_pat = { "^[-+](%a)=?(.*)" }
 local long_flag_pat = { "^%-%-(%a[%a%d-]*)=?(.*)", "^%+%+(%a[%a%d-]*)=?(.*)" }
 
----@class ArgObject : diffview.Object
+---@class ArgObject
 ---@field flags table<string, string[]>
 ---@field args string[]
 ---@field post_args string[]
-local ArgObject = oop.create_class("ArgObject")
+local ArgObject = {}
+ArgObject.__index = ArgObject
+setmetatable(ArgObject, {
+  __call = function(_, ...)
+    local args = setmetatable({}, ArgObject)
+    args:init(...)
+    return args
+  end,
+})
 
 ---ArgObject constructor.
 ---@param flags table<string, string[]>
@@ -74,9 +81,17 @@ function ArgObject:get_flag(names, opt)
   return opt.expect_list and values or values[#values]
 end
 
----@class FlagValueMap : diffview.Object
+---@class FlagValueMap
 ---@field map table<string, string[]|fun(name_lead: string, arg_lead: string): string[]>
-local FlagValueMap = oop.create_class("FlagValueMap")
+local FlagValueMap = {}
+FlagValueMap.__index = FlagValueMap
+setmetatable(FlagValueMap, {
+  __call = function(_)
+    local map = setmetatable({}, FlagValueMap)
+    map:init()
+    return map
+  end,
+})
 
 ---FlagValueMap constructor
 function FlagValueMap:init()

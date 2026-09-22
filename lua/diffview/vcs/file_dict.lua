@@ -1,10 +1,9 @@
-local oop = require("diffview.oop")
 local FileTree = require("diffview.ui.models.file_tree.file_tree").FileTree
 local M = {}
 
 ---@alias vcs.FileKind "conflicting"|"working"|"staged"
 
----@class FileDict : diffview.Object
+---@class FileDict
 ---@field [integer] FileEntry
 ---@field sets FileEntry[][]
 ---@field conflicting FileEntry[]
@@ -13,7 +12,14 @@ local M = {}
 ---@field conflicting_tree FileTree
 ---@field working_tree FileTree
 ---@field staged_tree FileTree
-local FileDict = oop.create_class("FileDict")
+local FileDict = {}
+setmetatable(FileDict, {
+  __call = function()
+    local files = setmetatable({}, FileDict)
+    files:init()
+    return files
+  end,
+})
 
 ---FileDict constructor.
 function FileDict:init()

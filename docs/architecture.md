@@ -51,8 +51,10 @@ replacement is atomic; multi-file rollback is best effort and fully reported.
 3. `scene/views/file_history/store.lua` and `vcs/query.lua`
 4. `merge/transaction.lua`, `merge/projection.lua`, and `merge/session.lua`
 5. `ui/component.lua`, `ui/router.lua`, and `ui/component_renderer.lua`
-6. `runtime/process_task.lua`, `runtime/process_group.lua`, and adapter ports
+6. `runtime/effect_scope.lua`, `runtime/process_task.lua`,
+   `runtime/process_group.lua`, and adapter ports
 
 Some mature scene objects still use the repository's class and coroutine
 helpers for dispatch. They are active implementation, not compatibility
-facades; new domain, runtime, and component modules use plain annotated tables.
+facades. Effect scopes, events, runtime primitives, and new domain/component
+modules use plain annotated tables.

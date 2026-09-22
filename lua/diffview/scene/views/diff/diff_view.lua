@@ -124,6 +124,12 @@ function DiffView:post_open()
   if config.get_config().watch_index and self.adapter:supports(Capability.INDEX_WATCH) then
     local index_path = assert(self.adapter:index_watch_path(), "index watcher requires a path")
     self.watcher = assert(vim.uv.new_fs_poll(), "Failed to create fs poll handle!")
+    self.effects:own(self.watcher, function(watcher)
+      if not watcher:is_closing() then
+        watcher:stop()
+        watcher:close()
+      end
+    end)
 
     -- The git index always ends with a SHA-1 (20B) or SHA-256 (32B) checksum
     -- of the preceding content, so reading its trailing bytes gives a cheap
@@ -373,6 +379,7 @@ function DiffView:_init_selection_events()
     self._save_selections = debounce.debounce_trailing(500, false, function()
       self:_save_selections_now()
     end)
+    self.effects:own(self._save_selections)
   end
 
   -- Always wire the panel callback so the User event fires regardless of
@@ -520,16 +527,10 @@ function DiffView:close(opts)
   if not self.closing:check() then
     self.closing:send()
 
-    -- Final save and clean up the debounced handle.
+    -- Final save; the view EffectScope closes the debounced handle.
     if self._save_selections then
       self:_save_selections_now()
-      self._save_selections:close()
       self._save_selections = nil
-    end
-
-    if self.watcher then
-      self.watcher:stop()
-      self.watcher:close()
     end
 
     if self._gitsigns_augroup then

@@ -130,6 +130,7 @@ local LayoutMode = oop.enum({
 ---@field _saved_diffopt string[]? Per-view saved diffopt value before overrides.
 ---@field _global_callbacks table<any, function> # Callbacks registered on the global emitter, keyed by event.
 ---@field shell diffview.ViewShell
+---@field effects diffview.EffectScope
 local View = oop.create_class("View")
 
 ---@diagnostic disable unused-local
@@ -155,12 +156,14 @@ function View:init(opt)
   self.closing = utils.sate(opt.closing, Signal())
   self._global_callbacks = {}
   self.shell = ViewShell.new(self)
+  self.effects = self.shell.effects
 
   local function wrap_event(event)
     local cb = function(_, view, ...)
-      local cur_view = require("diffview.lib").get_current_view()
-
-      if (view and view == self) or (not view and cur_view == self) then
+      -- Most lifecycle events carry their view explicitly. Avoid loading lib
+      -- (and its global integrations) unless an unscoped event actually needs
+      -- current-view resolution.
+      if view == self or (not view and require("diffview.lib").get_current_view() == self) then
         self.emitter:emit(event, view, ...)
       end
     end

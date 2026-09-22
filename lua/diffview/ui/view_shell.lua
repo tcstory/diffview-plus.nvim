@@ -6,14 +6,16 @@
 ---@class diffview.ViewShell
 ---@field owner View
 ---@field state "idle"|"loading"|"ready"|"closing"|"closed"
----@field resources table<any, true>
+---@field effects diffview.EffectScope
 local ViewShell = {}
 ViewShell.__index = ViewShell
+
+local EffectScope = require("diffview.runtime.effect_scope")
 
 ---@param owner View
 ---@return diffview.ViewShell
 function ViewShell.new(owner)
-  return setmetatable({ owner = owner, state = "idle", resources = {} }, ViewShell)
+  return setmetatable({ owner = owner, state = "idle", effects = EffectScope.new() }, ViewShell)
 end
 
 function ViewShell:begin_loading()
@@ -46,16 +48,16 @@ function ViewShell:can_execute()
   return true, nil
 end
 
----@param resource table # Object exposing `release()` or `close()`.
----@return table resource
-function ViewShell:own(resource)
-  self.resources[resource] = true
-  return resource
+---@param resource any
+---@param cleanup? fun(resource: any, reason?: string)
+---@return any resource
+function ViewShell:own(resource, cleanup)
+  return self.effects:own(resource, cleanup)
 end
 
 ---@param resource table
 function ViewShell:disown(resource)
-  self.resources[resource] = nil
+  return self.effects:disown(resource)
 end
 
 function ViewShell:begin_close()
@@ -64,14 +66,7 @@ end
 
 function ViewShell:close()
   self:begin_close()
-  for resource in pairs(self.resources) do
-    if type(resource.release) == "function" then
-      pcall(resource.release, resource)
-    elseif type(resource.close) == "function" then
-      pcall(resource.close, resource)
-    end
-  end
-  self.resources = {}
+  self.effects:close("View closed")
   self.state = "closed"
 end
 

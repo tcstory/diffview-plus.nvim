@@ -1,6 +1,5 @@
 local async = require("diffview.async")
 local lazy = require("diffview.lazy")
-local oop = require("diffview.oop")
 
 local utils = lazy.require("diffview.utils") ---@module "diffview.utils"
 
@@ -66,7 +65,15 @@ table.insert(WINDOWS_PATH_SPECIFIER, WINDOWS_PATH_SPECIFIER.drive)
 ---@field sep "/"|"\\"
 ---@field os "unix"|"windows" Determines the type of paths we're dealing with.
 ---@field cwd string Leave as `nil` to always use current cwd.
-local PathLib = oop.create_class("PathLib")
+local PathLib = {}
+PathLib.__index = PathLib
+setmetatable(PathLib, {
+  __call = function(_, ...)
+    local path_lib = setmetatable({}, PathLib)
+    path_lib:init(...)
+    return path_lib
+  end,
+})
 
 function PathLib:init(o)
   self.os = o.os or (is_windows and "windows" or "unix")

@@ -5,19 +5,21 @@ Derived from: https://github.com/Swatinem/diff
 
 ]]
 
-local oop = require("diffview.oop")
-
 local M = {}
 
 ---@enum EditToken
-local EditToken = oop.enum({
+local EditToken = {
   NOOP = 1,
   DELETE = 2,
   INSERT = 3,
   REPLACE = 4,
-})
+  [1] = "NOOP",
+  [2] = "DELETE",
+  [3] = "INSERT",
+  [4] = "REPLACE",
+}
 
----@class Diff : diffview.Object
+---@class Diff
 ---@operator call : Diff
 ---@field a any[]
 ---@field b any[]
@@ -26,7 +28,15 @@ local EditToken = oop.enum({
 ---@field up table<integer, integer>
 ---@field down table<integer, integer>
 ---@field eql_fn function
-local Diff = oop.create_class("Diff")
+local Diff = {}
+Diff.__index = Diff
+setmetatable(Diff, {
+  __call = function(_, ...)
+    local diff = setmetatable({}, Diff)
+    diff:init(...)
+    return diff
+  end,
+})
 
 ---Diff constructor.
 ---@param a any[]

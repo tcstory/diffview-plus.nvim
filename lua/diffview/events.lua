@@ -1,14 +1,14 @@
 local lazy = require("diffview.lazy")
-local oop = require("diffview.oop")
 
 local utils = lazy.require("diffview.utils") ---@module "diffview.utils"
 
 local M = {}
 
 ---@enum EventName
-local EventName = oop.enum({
+local EventName = {
   FILES_STAGED = 1,
-})
+  [1] = "FILES_STAGED",
+}
 
 ---@alias ListenerType "normal"|"once"|"any"|"any_once"
 ---@alias ListenerCallback (fun(e: Event, ...): boolean?)
@@ -18,11 +18,19 @@ local EventName = oop.enum({
 ---@field callback ListenerCallback The original callback
 ---@field call function
 
----@class Event : diffview.Object
+---@class Event
 ---@operator call : Event
 ---@field id any
 ---@field propagate boolean
-local Event = oop.create_class("Event")
+local Event = {}
+Event.__index = Event
+setmetatable(Event, {
+  __call = function(_, opt)
+    local event = setmetatable({}, Event)
+    event:init(opt)
+    return event
+  end,
+})
 
 function Event:init(opt)
   self.id = opt.id
@@ -33,12 +41,20 @@ function Event:stop_propagation()
   self.propagate = false
 end
 
----@class EventEmitter : diffview.Object
+---@class EventEmitter
 ---@operator call : EventEmitter
 ---@field event_map table<any, Listener[]> # Registered events mapped to subscribed listeners.
 ---@field any_listeners Listener[] # Listeners subscribed to all events.
 ---@field emit_lock table<any, boolean>
-local EventEmitter = oop.create_class("EventEmitter")
+local EventEmitter = {}
+EventEmitter.__index = EventEmitter
+setmetatable(EventEmitter, {
+  __call = function()
+    local emitter = setmetatable({}, EventEmitter)
+    emitter:init()
+    return emitter
+  end,
+})
 
 ---EventEmitter constructor.
 function EventEmitter:init()

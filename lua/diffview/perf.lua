@@ -1,18 +1,25 @@
-local oop = require("diffview.oop")
 local utils = require("diffview.utils")
 
 local uv = vim.uv
 
 local M = {}
 
----@class PerfTimer : diffview.Object
+---@class PerfTimer
 ---@operator call : PerfTimer
 ---@field subject string|nil
 ---@field first integer Start time (ns)
 ---@field last integer Stop time (ns)
 ---@field final_time number Final time (ms)
 ---@field laps { [1]: string|number, [2]: number }[] List of lap times (ms), each entry `{ subject, ms }`.
-local PerfTimer = oop.create_class("PerfTimer")
+local PerfTimer = {}
+PerfTimer.__index = PerfTimer
+setmetatable(PerfTimer, {
+  __call = function(_, subject)
+    local timer = setmetatable({}, PerfTimer)
+    timer:init(subject)
+    return timer
+  end,
+})
 
 ---PerfTimer constructor.
 ---@param subject string|nil

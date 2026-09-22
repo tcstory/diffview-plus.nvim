@@ -1,10 +1,16 @@
-local oop = require("diffview.oop")
-
----@class Scanner : diffview.Object
+---@class Scanner
 ---@operator call : Scanner
 ---@field lines string[]
 ---@field line_idx integer
-local Scanner = oop.create_class("Scanner")
+local Scanner = {}
+Scanner.__index = Scanner
+setmetatable(Scanner, {
+  __call = function(_, source)
+    local scanner = setmetatable({}, Scanner)
+    scanner:init(source)
+    return scanner
+  end,
+})
 
 ---@param source string|string[]
 function Scanner:init(source)

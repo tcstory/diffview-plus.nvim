@@ -530,7 +530,7 @@ require("diffview").setup({
 - [x] 为被删除的 config/API/keymap 提供简洁迁移文档和明确错误信息。
 - [ ] 更新 README、help、recipes、截图和 UI walkthrough（文字与 walkthrough 已更新；新 UI 截图待补）。
 - [x] 增加“从入口到一次 action”架构导览，以及 DiffView/FileHistory/MergeView 三条端到端数据流说明。
-- [ ] 汇总各 Phase developer note，使读者能够从最小模块逐步学习 Store、EffectScope、Renderer、Router 和 adapter port（导览已完成；计划中的 EffectScope 模块尚不存在）。
+- [x] 汇总各 Phase developer note，使读者能够从最小模块逐步学习 Store、EffectScope、Renderer、Router 和 adapter port。
 - [x] 更新 `:checkhealth diffview`，输出 API baseline、adapter、UI preset 和 deprecated usage。
 - [ ] 删除无调用模块、全局函数和过时 workaround（已删除本轮确认无调用的兼容模块；活跃 core 见 deletion ledger）。
 

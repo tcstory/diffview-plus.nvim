@@ -1,5 +1,4 @@
 local lazy = require("diffview.lazy")
-local oop = require("diffview.oop")
 local MergeProjection = require("diffview.scene.views.diff.merge_projection").MergeProjection
 local MergeTransaction = require("diffview.domain.merge_transaction").MergeTransaction
 
@@ -38,7 +37,7 @@ local M = {}
 ---@field bufnr? integer
 ---@field file_entry? FileEntry
 
----@class MergeSession : diffview.Object
+---@class MergeSession
 ---@operator call : MergeSession
 ---@field adapter GitAdapter
 ---@field entries table<string, MergeSession.Entry>
@@ -47,7 +46,15 @@ local M = {}
 ---@field projection MergeProjection
 ---@field transaction MergeTransaction
 ---@field on_change? fun(session: MergeSession, entry: MergeSession.Entry)
-local MergeSession = oop.create_class("MergeSession")
+local MergeSession = {}
+MergeSession.__index = MergeSession
+setmetatable(MergeSession, {
+  __call = function(_, ...)
+    local session = setmetatable({}, MergeSession)
+    session:init(...)
+    return session
+  end,
+})
 
 local function copy_lines(lines)
   return vim.deepcopy(lines or {})
