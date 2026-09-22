@@ -1,8 +1,8 @@
 # diffview-plus.nvim — Developer Guide
 
-> Phase: 0 (Baseline)  
-> Target Neovim: ≥ 0.12.0  
-> Last updated: 2026-09-19
+> Phase: 10 (Final architecture)
+> Target Neovim: ≥ 0.12.0
+> Last updated: 2026-09-22
 
 This guide is the starting point for anyone contributing to diffview-plus.nvim.
 It covers the minimum setup needed to run the plugin from source, execute tests,
@@ -100,26 +100,26 @@ make check
 
 ## 5. Trace one action end-to-end
 
-This section walks a single user action ("stage file") from keypress to git
-command, so you can quickly orient yourself in the codebase.
+This section follows the `diff.toggle_stage_entry` action from UI input to a
+Git process and back to the projected file list.
 
-> **Note**: This walk-through reflects the **pre-refactor** architecture.
-> The module names and call sites will change as each Phase progresses; this
-> document will be updated after each Phase.
-
-1. **Keymap** — `lua/diffview/config.lua` maps `<leader>s` to `actions.stage_all`.
-2. **Action** — `lua/diffview/actions.lua` `stage_all()` resolves the current
-   view via `require("diffview").get_current_view()`.
-3. **View** — `DiffView:stage_all()` calls the active VCS adapter.
-4. **Adapter** — `lua/diffview/vcs/adapters/git/init.lua` builds a
-   `git add` argument list and spawns a `Job` via `lua/diffview/job.lua`.
-5. **Job** — wraps `vim.uv.spawn`; completion callback dispatches an event.
-6. **Event** — `DiffviewGlobal.emitter:emit("REFRESH")` triggers a panel
-   re-render.
+1. **Input** — a toolbar component, palette item, click, or custom keymap carries
+   the stable action ID `diff.toggle_stage_entry`.
+2. **Route** — `lua/diffview/ui/router.lua` resolves the component and dispatches
+   the ID through `runtime/action_registry.lua` with the current view context.
+3. **Action** — `lua/diffview/actions/diff.lua` declares metadata and capability
+   requirements; the implementation in `actions/impl.lua` emits a typed command.
+4. **Adapter port** — the command calls the adapter's stage capability. Git
+   delegates argv construction to `vcs/adapters/git/stage.lua`.
+5. **Process** — `runtime/process_task.lua` runs the argv list through
+   `vim.system()`; the owning view's `EffectScope` can cancel it on close.
+6. **Projection** — completion dispatches one refresh intent. The `DiffStore`
+   accepts only the current generation, then the component renderer patches
+   changed buffer lines and extmarks.
 
 > **Tracing tip**: set `DEBUG_DIFFVIEW=10` in your shell before launching
 > Neovim to enable verbose logging at level 10 (rendering & async).
-> Output goes to `DiffviewGlobal.logger`.
+> Output goes through the logger owned by `diffview.runtime.context`.
 
 ---
 
@@ -134,12 +134,12 @@ DEBUG_DIFFVIEW=10 nvim
 Log levels:  
 `0` = silent · `1` = normal · `5` = loading · `10` = rendering & async
 
-### Inspect global state
+### Inspect the current view state
 
 In any Neovim session:
 
 ```vim
-:lua print(vim.inspect(DiffviewGlobal.state))
+:lua local v = require("diffview.lib").get_current_view(); print(vim.inspect(v and v.store and v.store.state))
 ```
 
 ### Breakpoint with `vim.print`
@@ -170,31 +170,29 @@ local ms = (vim.uv.hrtime() - t0) / 1e6
 print(string.format("elapsed: %.2f ms", ms))
 ```
 
-Baseline benchmarks (Phase 0) for the reference dataset are recorded in
-`docs/adr/adr-000-phase0-baselines.md`.
+Repeatable scale budgets and their test commands are recorded in
+`docs/performance-baselines.md`.
 
 ---
 
-## 8. Architecture overview (Phase 0 baseline)
+## 8. Architecture overview
 
 ```
-plugin/diffview.vim          -- Vimscript shim; loads bootstrap + commands
-lua/diffview/bootstrap.lua   -- Global init, version guard, EventEmitter
-lua/diffview/config.lua      -- ~1900-line monolithic config + keymap setup
-lua/diffview/actions.lua     -- ~1300-line action implementations
-lua/diffview/scene/          -- View / Layout / Panel / Window hierarchy
-lua/diffview/vcs/            -- Git / JJ / Hg / P4 adapters
-lua/diffview/async.lua       -- Self-rolled coroutine scheduler (Waitable)
-lua/diffview/job.lua         -- libuv process wrapper (pre-vim.system era)
-lua/diffview/tests/          -- Plenary-based functional tests
+plugin/diffview.lua                 -- user commands and Lua completion
+lua/diffview/runtime/               -- process, ownership, progress, actions
+lua/diffview/domain/                -- pure merge transaction state
+lua/diffview/actions/               -- action declarations by domain
+lua/diffview/vcs/                   -- capability ports and adapters
+lua/diffview/ui/                    -- components, router, leases, renderer
+lua/diffview/scene/views/*/store.lua -- view state and typed commands
+lua/diffview/tests/                 -- unit, functional, race, integration tests
 ```
 
-The current architecture is **hub-and-spoke** around `DiffviewGlobal` and a
-shared `EventEmitter`.  The refactor plan (`REFACTOR_PLAN.md`) incrementally
-replaces this with layered Store / EffectScope / ActionRegistry / UIRouter.
-
-Each Phase adds a `docs/adr/` entry describing what changed, which Neovim APIs
-were used, and what was deleted.
+The dependency flow is input → action → domain/store → projection. Shared
+bootstrap services are module-local in `runtime/context.lua`; no mutable `_G`
+state is used. See `docs/architecture.md` for all three end-to-end view flows
+and `docs/phase3-actions.md` through `docs/phase10-cleanup.md` for the phase
+notes.
 
 ---
 

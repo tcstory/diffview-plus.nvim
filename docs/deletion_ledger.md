@@ -78,12 +78,12 @@ deletion is expected.
 
 | Field | Value |
 |-------|-------|
-| **Status** | 🟡 In progress — emitter access migrated to ctx; typed action IDs in Phase 3 |
+| **Status** | ✅ Scoped and typed at action boundaries; retained for lifecycle notifications and public hooks |
 | **Files** | `lua/diffview/events.lua`, all `ctx.emitter:emit(...)` call sites |
 | **Reason** | String-keyed events have no static type, no payload schema, and produce invisible coupling between emitters and listeners.  Replacing with explicit typed event/action tables makes data flow auditable. |
 | **Replacement** | Explicit action types in `lua/diffview/runtime/action_registry.lua` (Phase 3 deliverable) |
 | **Phase** | 2 (emitter infrastructure); Phase 3 (action wiring) |
-| **Deleted in** | — |
+| **Deleted in** | Not deleted: action execution moved to typed registry IDs in `d9da23d`; the remaining emitter is the documented lifecycle/hook transport, not an action bus. |
 
 ---
 
@@ -99,6 +99,17 @@ deletion is expected.
 | **Replacement** | `lua/diffview/runtime/action_registry.lua`; all built-ins, factory variants and UI surfaces use action IDs |
 | **Phase** | 3 |
 | **Deleted in** | commit `d9da23d` (Phase 3 completion) |
+
+### Monolithic configuration implementation
+
+| Field | Value |
+|-------|-------|
+| **Status** | ✅ Split |
+| **Files** | `lua/diffview/config.lua` and `lua/diffview/config/{defaults,log_options,validate,migration}.lua` |
+| **Reason** | Defaults/schema, validation, migration policy, and mutable runtime state previously shared one 1,765-line module. |
+| **Replacement** | Focused modules; `diffview.config` remains the stable runtime facade. |
+| **Phase** | 10 |
+| **Deleted in** | Phase 10 final-audit commit |
 
 ### Monolithic `actions.lua` (~1300 lines)
 
@@ -227,34 +238,31 @@ deletion is expected.
 
 | Field | Value |
 |-------|-------|
-| **Status** | 🟨 Removal in progress |
+| **Status** | ✅ Deleted |
 | **Files** | `lua/diffview/oop.lua` and the remaining inherited scene, panel, layout, and adapter families |
 | **Reason** | The OOP framework predates Neovim's `vim.iter`, LuaLS annotations and modern Lua idioms.  It adds a non-standard class mechanism that is invisible to LuaLS and confuses new contributors.  The refactor uses plain Lua tables and `---@class` annotations throughout. |
 | **Replacement** | Plain Lua modules with LuaLS `---@class` / `---@field` annotations |
 | **Phase** | Phase 10 vertical slices |
-| **Deleted in** | —; runtime primitives, value objects, streams, and renderer data types now use plain tables; 43 inherited declarations remain |
+| **Deleted in** | commits `c4eea2f` and `43ea328`; all former class families and `lua/diffview/oop.lua` now use plain annotated tables |
 
 ### Self-built coroutine scheduler (`async.lua`, `Waitable`)
 
 | Field | Value |
 |-------|-------|
-| **Status** | ⬜ Retained after live-caller audit |
+| **Status** | ✅ Keep decision recorded (Neovim 0.12 boundary) |
 | **Files** | `lua/diffview/async.lua`, `lua/diffview/control.lua` |
 | **Reason** | The scheduler predates `vim.system()` and does not integrate with Neovim's own `vim.schedule`/`vim.defer_fn` boundary cleanly.  Cancellation and close-race are each caller's responsibility.  `EffectScope` + `vim.system` provide cleaner cancellation without a custom scheduler. |
-| **Replacement** | `vim.system()` now owns subprocess management; a future lifecycle migration must replace coroutine callers before scheduler removal |
-| **Phase** | Post-refactor vertical slices; it is not compatibility code |
-| **Deleted in** | —; live view/query callers remain |
+| **Replacement** | `vim.system()` owns subprocess management and `EffectScope` owns cancellation/resources. Coroutine coordination remains until a stable Neovim async primitive exists. |
+| **Phase** | 10 decision: retain as active runtime code, with no process or view-resource ownership |
+| **Deleted in** | Not deleted. Neovim 0.12.4 has no stable `vim.async`; a rename would not be a migration. Revisit when the runtime baseline changes. |
 
 ---
 
-## Investigation queue
+## Final caller-audit decisions
 
-These items need a caller-count / usage analysis before a decision is made.
-
-| Module | Concern |
-|--------|---------|
-| `lua/diffview/path.lua` (`PathLib`) | Large utility; partially superseded by `vim.fs.*`.  Identify which methods have no `vim.fs` equivalent. |
-| `lua/diffview/diff.lua` | Uses `vim.diff` (old alias?).  Check if `vim.text.diff` can replace fully. |
-| `lua/diffview/scene/inline_diff.lua` UTF-8 helpers | Check if `vim.str_utf_pos` replaces all hand-written iterators. |
-| `lua/diffview/ffi.lua` | Determine which FFI calls are still required under 0.12 and whether stable API alternatives exist. |
-| Vimscript completion bridge | Identify remaining `:command -complete=customlist,...` sites; check if Lua completion callbacks cover them. |
+| Module | Decision |
+|--------|----------|
+| `lua/diffview/path.lua` (`PathLib`) | Keep. It has active repository/path object semantics beyond the `vim.fs` helpers; common normalization/root operations already use `runtime/fs.lua`. |
+| `lua/diffview/diff.lua` / inline diff | Migrated. Production diffing uses `vim.text.diff`; UTF-8 positions use `vim.str_utf_pos`. Remaining `vim.diff` text is explanatory commentary. |
+| `lua/diffview/ffi.lua` | Keep narrowly for `nvim_is_locked()`, used by the 0.12 scheduler boundary. There is no equivalent stable 0.12 Lua API; no other FFI ownership remains. |
+| Vimscript input-completion bridge | Keep only for `vim.ui.input`/`input()` custom completion. User commands use native Lua completion callbacks. Neovim 0.12 still requires a named `customlist` function for this input path. |

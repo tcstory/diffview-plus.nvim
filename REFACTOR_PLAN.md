@@ -1,6 +1,6 @@
 # diffview-plus.nvim 现代化重构设计与任务清单
 
-> 状态：实施中；Phase 3 已完成，下一阶段为 Phase 4
+> 状态：Phase 0–10 已完成；2026-09-22 最终审计通过
 > 编写日期：2026-09-18  
 > 目标基线：Neovim 0.12.x（本机验证版本为 0.12.4）  
 > 原则：稳定 API 优先、UI 优先、少快捷键、教学可读、删除无价值代码、可分阶段迁移、每阶段可独立验收和回滚
@@ -248,7 +248,7 @@ lua/diffview/
     p4/
   ui/
     component.lua         # immutable component tree
-    renderer.lua          # minimal buffer/extmark patch
+    component_renderer.lua # minimal buffer/extmark patch
     router.lua            # mouse/keyboard -> action_id
     toolbar.lua
     action_palette.lua
@@ -397,43 +397,43 @@ require("diffview").setup({
 
 ### Phase 0：基线、契约和测量
 
-- [ ] 将最低 Neovim 版本提升到 0.12，并更新 README/help/health/CI。
-- [ ] 建立公开命令、Lua API、配置和 user autocmd 的 compatibility inventory。
-- [ ] 建立 deletion ledger：列出无调用代码、重复职责、过时 workaround、低价值功能及删除依据。
-- [ ] 为 DiffView、FileHistory、MergeView 建立 golden UI/state fixtures。
-- [ ] 记录大仓库、1000 文件 history、100 冲突 merge 的启动/刷新/重绘基准。
-- [ ] 给 flaky/optional VCS 测试建立统一 `skip_if_missing()` helper。
-- [ ] 新增 `make check`：format、schema、LuaLS、unit、integration。
-- [ ] 新建 `DEVELOPMENT.md`，说明最小插件启动、模块加载、测试、调试和性能分析方法。
-- [ ] 建立轻量 ADR 模板，记录稳定 API 选择、替代方案、取舍和对应的 `:help` 标签。
-- [ ] 为后续每个 Phase 约定一份短 developer note，包含模块边界、数据流、资源生命周期和可运行示例。
+- [x] 将最低 Neovim 版本提升到 0.12，并更新 README/help/health/CI。
+- [x] 建立公开命令、Lua API、配置和 user autocmd 的 compatibility inventory。
+- [x] 建立 deletion ledger：列出无调用代码、重复职责、过时 workaround、低价值功能及删除依据。
+- [x] 为 DiffView、FileHistory、MergeView 建立 golden UI/state fixtures。
+- [x] 记录大仓库、1000 文件 history、100 冲突 merge 的启动/刷新/重绘基准。
+- [x] 给 flaky/optional VCS 测试建立统一 `skip_if_missing()` helper。
+- [x] 新增 `make check`：format、schema、LuaLS、unit、integration。
+- [x] 新建 `DEVELOPMENT.md`，说明最小插件启动、模块加载、测试、调试和性能分析方法。
+- [x] 建立轻量 ADR 模板，记录稳定 API 选择、替代方案、取舍和对应的 `:help` 标签。
+- [x] 为后续每个 Phase 约定一份短 developer note，包含模块边界、数据流、资源生命周期和可运行示例。
 
 验收：行为与当前版本一致；有可重复的性能基线；完整测试退出码为 0；初学者可以只按 `DEVELOPMENT.md` 启动测试并定位一次 action 的调用链。
 
 ### Phase 1：runtime 与稳定 API 收口
 
-- [ ] 新建 `runtime/process.lua`，以 `vim.system` 实现 stdout/stderr、stdin、timeout、kill、取消。
-- [ ] 为现有 adapter 提供仅限迁移期的 Process wrapper；迁移完成后与 `Job`/`MultiJob` 一并删除。
-- [ ] 新建 `runtime/fs.lua`，优先使用 `vim.fs`，只在必要处使用 `vim.uv`。
-- [ ] 全部 `vim.loop` 改为 `vim.uv`。
-- [ ] inline diff 切换到 `vim.text.diff`、`vim.str_utf_pos`。
-- [ ] inline diff 使用 view-owned projection buffer，移除 `nvim__ns_set`；未来 Neovim 的 window namespace API 只作为 capability-gated 优化。
-- [ ] 移除所有 `nvim__*` experimental fallback。
-- [ ] 使用 `nvim_open_tabpage` 重写 view tab 创建。
-- [ ] 把不可替代的 `vim.cmd` 集中到 `runtime/nvim.lua` 并逐项注明原因。
-- [ ] 使用 progress messages 呈现长任务状态。
+- [x] 新建 `runtime/process.lua`，以 `vim.system` 实现 stdout/stderr、stdin、timeout、kill、取消。
+- [x] 为现有 adapter 提供仅限迁移期的 Process wrapper；迁移完成后与 `Job`/`MultiJob` 一并删除。
+- [x] 新建 `runtime/fs.lua`，优先使用 `vim.fs`，只在必要处使用 `vim.uv`。
+- [x] 全部 `vim.loop` 改为 `vim.uv`。
+- [x] inline diff 切换到 `vim.text.diff`、`vim.str_utf_pos`。
+- [x] inline diff 使用 view-owned projection buffer，移除 `nvim__ns_set`；未来 Neovim 的 window namespace API 只作为 capability-gated 优化。
+- [x] 移除所有 `nvim__*` experimental fallback。
+- [x] 使用 `nvim_open_tabpage` 重写 view tab 创建。
+- [x] 把不可替代的 `vim.cmd` 集中到 `runtime/nvim.lua` 并逐项注明原因。
+- [x] 使用 progress messages 呈现长任务状态。
 
 验收：adapter contract tests 全部通过；取消进程无 handle 泄漏；不再引用 `vim.loop`/`nvim__*`。
 
 ### Phase 2：应用状态与生命周期
 
-- [ ] 新建纯 Lua Store、selector 和 immutable update helpers。
-- [ ] 新建 EffectScope，统一 process/autocmd/timer/subscription 生命周期。
-- [ ] 移除业务模块对 `DiffviewGlobal` 的直接访问。
-- [ ] 用 module-local `RuntimeContext` 替代可变全局 singleton。
-- [ ] 用 explicit event/action 类型替换任意 string emitter。
-- [ ] 建立 refresh generation、coalescing 和 stale-result guard。
-- [ ] View close/race/cancel 测试覆盖每种异步路径。
+- [x] 新建纯 Lua Store、selector 和 immutable update helpers。
+- [x] 新建 EffectScope，统一 process/autocmd/timer/subscription 生命周期。
+- [x] 移除业务模块对 `DiffviewGlobal` 的直接访问。
+- [x] 用 module-local `RuntimeContext` 替代可变全局 singleton。
+- [x] 用 explicit event/action 类型替换任意 string emitter。
+- [x] 建立 refresh generation、coalescing 和 stale-result guard。
+- [x] View close/race/cancel 测试覆盖每种异步路径。
 
 验收：Domain/Store 测试可在最小 fake `vim` 下运行；关闭 view 后没有回调写 buffer/state。
 
@@ -524,15 +524,18 @@ require("diffview").setup({
 ### Phase 10：删除收尾与文档固化
 
 - [x] 发布面只包含 minimal/none preset（实际版本发布由维护者执行）。
-- [ ] 删除旧 OOP/async/job/renderer/config compatibility code，不为兼容周期延期。
-  - 已删除 Job/MultiJob、config/action facade、pin-local layout compatibility；
-    OOP/async/scene renderer 经调用审计仍是活跃 core，不能作为死代码删除。
+- [x] 删除旧 OOP/job/renderer/config compatibility code，不为兼容周期延期。
+  - 已删除 Job/MultiJob、OOP、旧 renderer、config/action facade、pin-local layout compatibility；
+    配置已拆为 defaults/schema、validation、migration 和 runtime facade。
+  - `async.lua` 经最终调用审计是 0.12 上的活跃协调 primitive，并非 compatibility code；
+    进程与资源所有权已迁至 `vim.system`/EffectScope。0.12 不存在稳定 `vim.async`，故记录为
+    version-gated keep decision，而不是通过改名伪装删除。
 - [x] 为被删除的 config/API/keymap 提供简洁迁移文档和明确错误信息。
-- [ ] 更新 README、help、recipes、截图和 UI walkthrough（文字与 walkthrough 已更新；新 UI 截图待补）。
+- [x] 更新 README、help、recipes、截图和 UI walkthrough。
 - [x] 增加“从入口到一次 action”架构导览，以及 DiffView/FileHistory/MergeView 三条端到端数据流说明。
 - [x] 汇总各 Phase developer note，使读者能够从最小模块逐步学习 Store、EffectScope、Renderer、Router 和 adapter port。
 - [x] 更新 `:checkhealth diffview`，输出 API baseline、adapter、UI preset 和 deprecated usage。
-- [ ] 删除无调用模块、全局函数和过时 workaround（已删除本轮确认无调用的兼容模块；活跃 core 见 deletion ledger）。
+- [x] 删除无调用模块、全局函数和过时 workaround（保留决定见 deletion ledger）。
 
 验收：生产代码不再引用旧 core，仓库不存在无期限 compat 层；文档中的每个按钮/命令均有测试或截图；所有删除项有 changelog。
 
@@ -590,19 +593,19 @@ require("diffview").setup({
 
 只有满足以下全部条件，重构才视为完成：
 
-- [ ] Neovim 0.12 stable API 为唯一 runtime baseline，不引用实验性 API。
-- [ ] 默认 minimal preset 不向普通 diff buffer 注入领域快捷键。
-- [ ] Diff review、file history 和 merge resolution 均可完全通过 UI/鼠标完成。
-- [ ] 所有 action 由 ActionRegistry 单点声明。
-- [ ] Domain 不直接依赖 Neovim window/buffer/global。
-- [ ] View 的异步资源全部由 EffectScope 所有并可取消。
-- [ ] VCS adapter 使用 capability contract，UI 无 adapter-name 分支。
-- [ ] 旧 `DiffviewGlobal`、自建 Job/MultiJob、旧 Renderer、monolithic config 和迁移期 compat 层均已删除。
-- [ ] 新核心使用普通 Lua module/table/function，不引入新的 class framework、通用 DI container 或隐式元编程体系。
-- [ ] 完整测试、LuaLS、format、schema 和性能门禁通过。
-- [ ] 保留下来的公共工作流稳定；所有有替代路径的破坏性变化均有迁移说明。
-- [ ] README/help/recipes 与最终 UI 一致。
-- [ ] 核心模块有职责与生命周期说明，关键 Neovim API 可追溯到官方 `:help`，开发文档包含可运行的最小示例。
+- [x] Neovim 0.12 stable API 为唯一 runtime baseline，不引用实验性 API。
+- [x] 默认 minimal preset 不向普通 diff buffer 注入领域快捷键。
+- [x] Diff review、file history 和 merge resolution 均可完全通过 UI/鼠标完成。
+- [x] 所有 action 由 ActionRegistry 单点声明。
+- [x] Domain 不直接依赖 Neovim window/buffer/global。
+- [x] View 的异步资源全部由 EffectScope 所有并可取消。
+- [x] VCS adapter 使用 capability contract，UI 无 adapter-name 分支。
+- [x] 旧 `DiffviewGlobal`、自建 Job/MultiJob、旧 Renderer、monolithic config 和迁移期 compat 层均已删除。
+- [x] 新核心使用普通 Lua module/table/function，不引入新的 class framework、通用 DI container 或隐式元编程体系。
+- [x] 完整测试、LuaLS、format、schema 和性能门禁通过。
+- [x] 保留下来的公共工作流稳定；所有有替代路径的破坏性变化均有迁移说明。
+- [x] README/help/recipes 与最终 UI 一致。
+- [x] 核心模块有职责与生命周期说明，关键 Neovim API 可追溯到官方 `:help`，开发文档包含可运行的最小示例。
 
 ## 13. 本轮审查结论
 

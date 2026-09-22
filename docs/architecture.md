@@ -54,7 +54,13 @@ replacement is atomic; multi-file rollback is best effort and fully reported.
 6. `runtime/effect_scope.lua`, `runtime/process_task.lua`,
    `runtime/process_group.lua`, and adapter ports
 
-Some mature scene objects still use the repository's class and coroutine
-helpers for dispatch. They are active implementation, not compatibility
-facades. Effect scopes, events, runtime primitives, and new domain/component
-modules use plain annotated tables.
+Scene objects, layouts, panels, adapters, renderer data, and value types are
+plain annotated Lua tables. The former class framework and renderer facade
+have been deleted; `ui/component_renderer.lua` is the single buffer/extmark
+projection implementation.
+
+Coroutine coordination remains an internal runtime primitive on Neovim 0.12,
+which does not provide stable `vim.async`. It no longer owns subprocesses:
+`vim.system()` and `EffectScope` own process execution and cancellation. This
+boundary is documented in `docs/phase10-cleanup.md` and must be reconsidered
+when the minimum supported Neovim version exposes a stable replacement.

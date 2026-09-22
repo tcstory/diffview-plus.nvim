@@ -15,15 +15,30 @@ capabilities. The architecture guide links the action path and all three view
 data flows; README, help, recipes, and the migration guide use action IDs and
 the discoverable palette/toolbars.
 
-The final audit also corrected the deletion boundary: `oop.lua`, `async.lua`,
-and the scene renderer still have live production callers. They are not
-compatibility modules and are therefore retained until their callers can be
-migrated as independent vertical slices. Keeping an active core is preferable
-to relabeling it as dead code and breaking view dispatch.
+The final audit removed `oop.lua`, `renderer.lua`, and `ui/model.lua`. Scene
+objects, layouts, panels, adapter facades, streams, renderer data, and value
+types now use ordinary annotated Lua tables. Rendering is consolidated in
+`ui/component_renderer.lua`; there is no parallel legacy renderer.
 
-The first of those slices introduced `runtime/effect_scope.lua` and made every
-`ViewShell` own one scope. Index watchers and file-history debounce handles now
-register explicit disposers there. The same slice removed the OOP dependency
-from async/control/event primitives and independent utility types; inherited
-scene, renderer, stream, and adapter families remain tracked in the deletion
-ledger.
+The 1,765-line configuration module is now split into defaults/schema, log
+options, validation, migration policy, and a runtime facade. The source-based
+schema gate reads the defaults module directly, so explicitly nil options are
+still checked. Scale contracts for 1,000-entry DiffView/FileHistory workloads,
+a 1,000-line renderer patch, and 100 merge conflicts are recorded in
+`docs/performance-baselines.md`.
+
+`runtime/effect_scope.lua` gives every `ViewShell` one cancellation boundary.
+Index watchers, file-history debounce handles, subscriptions, scheduled
+callbacks, and `vim.system()` tasks register explicit disposers there.
+
+One intentional boundary remains: Neovim 0.12 has no stable `vim.async`, while
+the view and adapter call graph still needs sequential coroutine coordination.
+`async.lua` therefore remains active runtime code, not compatibility code. It
+does not spawn processes or own view resources. Renaming it would only hide the
+constraint; replacing it requires either callback-style rewrites of every
+caller or a future stable Neovim primitive. The deletion ledger records this
+version-gated decision explicitly.
+
+The final documentation pass also replaced the pre-refactor developer guide,
+updated the architecture walkthrough and deletion ledger, and synchronized the
+plan checklist with verified tests and commits.

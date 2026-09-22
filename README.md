@@ -231,6 +231,7 @@ guide, LSP diagnostics in diffs, platform notes, and plugin compatibility.
 | [TIPS.md](TIPS.md) | Tips, FAQ, and known compatibility issues |
 | [docs/migration-v2.md](docs/migration-v2.md) | Breaking-change migration guide |
 | [docs/architecture.md](docs/architecture.md) | Entry-to-action and view data flows |
+| [docs/performance-baselines.md](docs/performance-baselines.md) | Repeatable 1,000-entry and 100-conflict regression budgets |
 | `:h diffview` | Full plugin documentation |
 | `:h diffview.defaults` | Complete default configuration |
 

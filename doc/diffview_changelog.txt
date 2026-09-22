@@ -21,6 +21,13 @@ BREAKING (internal): `_G.DiffviewGlobal`, `diffview.job`,
 modules have been removed. Process execution uses `vim.system()` and pin-local
 ownership now lives on standard layout instances.
 
+BREAKING (internal): `diffview.oop`, `diffview.renderer`, and
+`diffview.ui.model` have been removed. Scene/layout/panel/adapter objects are
+plain annotated Lua tables, and rendering is consolidated in
+`diffview.ui.component_renderer`. Configuration defaults/schema, validation,
+log options, migration policy, and runtime state now live in focused modules
+behind the unchanged `diffview.config` entry point.
+
 `:checkhealth diffview` now reports the Neovim 0.12 API baseline, UI preset,
 interaction mode, deprecated-config policy, adapter selection, and adapter
 capabilities.

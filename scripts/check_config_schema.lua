@@ -1,4 +1,5 @@
--- Verify `M.defaults`, `@class DiffviewConfig`, and `@class DiffviewConfig.user`
+-- Verify the defaults table, `@class DiffviewConfig`, and
+-- `@class DiffviewConfig.user`
 -- declare the same set of top-level keys.
 --
 -- The check is purely source-based so that keys explicitly assigned `nil` in
@@ -26,7 +27,7 @@ local function read_file(path)
 end
 
 local root = repo_root()
-local src = read_file(root .. "/lua/diffview/config.lua")
+local src = read_file(root .. "/lua/diffview/config/defaults.lua")
 
 ---Match a Lua long-bracket opening (`[[`, `[=[`, `[==[`, ...) at `p`.
 ---Returns `(level, body_start)` where `level` is the number of `=` signs and
