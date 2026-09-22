@@ -135,8 +135,10 @@ describe("diffview.scene.views.diff.merge_view", function()
       local prev_res = router.dispatch_id(route_id(result_file.winbar, "[ ◀ ]"))
       eq(1, prev_res and prev_res.current)
 
-      assert.is_nil(result_file.winbar:find("[ OURS ]", 1, true))
-      assert.is_nil(result_file.winbar:find("[ THEIRS ]", 1, true))
+      assert.truthy(result_file.winbar:find("[ OURS ]", 1, true))
+      assert.truthy(result_file.winbar:find("[ BASE ]", 1, true))
+      assert.truthy(result_file.winbar:find("[ THEIRS ]", 1, true))
+      assert.truthy(result_file.winbar:find("[ ALL→OURS ]", 1, true))
 
       assert.is_true(view.panel:is_open())
       local expanded_width = vim.api.nvim_win_get_width(view.panel.winid)
@@ -164,7 +166,7 @@ describe("diffview.scene.views.diff.merge_view", function()
 
       assert.is_false(view:can_close({ force = false }))
 
-      view:choose_all_conflicts("ours")
+      router.dispatch_id(route_id(result_file.winbar, "[ ALL→OURS ]"))
       eq(0, view.merge_session:counts())
       eq(0, view.cur_entry.merge_conflicts_remaining)
       assert.is_true(view:apply_all())
@@ -249,11 +251,12 @@ describe("diffview.scene.views.diff.merge_view", function()
       -- Now switch to THEIRS by clicking [ THEIRS ]
       local resolved_status_w = vim.fn.strdisplaywidth(" ✔ ours ")
       local ours_w = vim.fn.strdisplaywidth("[ ✔ OURS ]")
+      local base_w = vim.fn.strdisplaywidth("[ BASE ]")
       vim.fn.getmousepos = function()
         return {
           winid = result_win,
           line = target_line,
-          wincol = textoff + resolved_status_w + ours_w + 5, -- inside [ THEIRS ] at front of line
+          wincol = textoff + resolved_status_w + ours_w + base_w + 7,
           column = 1,
           screenrow = virt_screenrow > 0 and virt_screenrow or nil,
         }
@@ -298,6 +301,33 @@ describe("diffview.scene.views.diff.merge_view", function()
       view.emitter:emit("unstage_all")
       assert.is_false(add_called)
       assert.is_false(reset_called)
+    end)
+  )
+
+  it(
+    "shows clickable stale recovery actions after an external worktree change",
+    helpers.async_test(function()
+      repo = make_conflict_repo()
+      local err, adapter = vcs.get_adapter({ top_indicators = { repo } })
+      assert.is_nil(err)
+      view = MergeView({ adapter = adapter, paths = { "file.txt" } })
+      view:open()
+      assert.is_true(vim.wait(2000, function()
+        local current = view.merge_session:get("file.txt")
+        return view.ready and current and current.bufnr ~= nil
+      end, 10))
+
+      view:choose_all_conflicts("ours")
+      helpers.write(repo, "file.txt", { "external resolution" })
+      assert.is_false(view:apply_all())
+      local winbar = view.cur_entry.layout.b.file.winbar
+      assert.truthy(winbar:find("[ STALE: REFRESH ]", 1, true))
+      assert.truthy(winbar:find("[ REOPEN ]", 1, true))
+      assert.truthy(winbar:find("[ DISCARD ]", 1, true))
+
+      assert.is_true(router.dispatch_id(route_id(winbar, "[ REOPEN ]")))
+      assert.is_nil(view.merge_session.transaction.stale["file.txt"])
+      eq({ "external resolution" }, view.merge_session:get("file.txt").result)
     end)
   )
 end)

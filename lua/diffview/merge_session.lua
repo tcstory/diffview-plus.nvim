@@ -1,5 +1,7 @@
 local lazy = require("diffview.lazy")
 local oop = require("diffview.oop")
+local MergeProjection = require("diffview.scene.views.diff.merge_projection").MergeProjection
+local MergeTransaction = require("diffview.domain.merge_transaction").MergeTransaction
 
 local utils = lazy.require("diffview.utils") ---@module "diffview.utils"
 local vcs_utils = lazy.require("diffview.vcs.utils") ---@module "diffview.vcs.utils"
@@ -11,6 +13,7 @@ local M = {}
 
 ---@class MergeSession.Conflict
 ---@field id integer
+---@field identity? string # Stable transaction identity; independent of buffer rows.
 ---@field start_line integer # 1-based start in the initial result.
 ---@field end_line integer # 1-based inclusive end; may be start_line - 1 for an empty base.
 ---@field ours string[]
@@ -41,6 +44,8 @@ local M = {}
 ---@field entries table<string, MergeSession.Entry>
 ---@field order string[]
 ---@field namespace integer
+---@field projection MergeProjection
+---@field transaction MergeTransaction
 ---@field on_change? fun(session: MergeSession, entry: MergeSession.Entry)
 local MergeSession = oop.create_class("MergeSession")
 
@@ -98,6 +103,12 @@ local function write_bytes(path, bytes, mode)
     return false, close_err
   end
   return true
+end
+
+---@param path string
+---@return uv.aliases.fs_stat_table?
+local function lstat(path)
+  return vim.uv.fs_lstat(path)
 end
 
 ---@param adapter GitAdapter
@@ -229,7 +240,8 @@ function MergeSession:init(adapter, paths)
   self.adapter = adapter
   self.entries = {}
   self.order = {}
-  self.namespace = api.nvim_create_namespace("diffview_transactional_merge")
+  self.projection = MergeProjection.new()
+  self.namespace = self.projection.namespace
 
   for _, path in ipairs(paths) do
     local merged, conflict_count, sides, err = diff3_merge(adapter, path)
@@ -271,6 +283,7 @@ function MergeSession:init(adapter, paths)
     self.entries[path] = entry
     self.order[#self.order + 1] = path
   end
+  self.transaction = MergeTransaction.new(self.entries, self.order)
 end
 
 ---@param path string
@@ -282,25 +295,13 @@ end
 ---@param entry MergeSession.Entry
 ---@return integer unresolved
 function MergeSession:entry_remaining(entry)
-  local count = 0
-  for _, conflict in ipairs(entry.conflicts) do
-    if not conflict.resolved then
-      count = count + 1
-    end
-  end
-  return count
+  return self.transaction:entry_remaining(entry)
 end
 
 ---@return integer unresolved
 ---@return integer total
 function MergeSession:counts()
-  local unresolved, total = 0, 0
-  for _, path in ipairs(self.order) do
-    local entry = self.entries[path]
-    total = total + #entry.conflicts
-    unresolved = unresolved + self:entry_remaining(entry)
-  end
-  return unresolved, total
+  return self.transaction:counts()
 end
 
 ---@param entry MergeSession.Entry
@@ -308,59 +309,13 @@ end
 ---@return integer start_row # 0-based, inclusive
 ---@return integer end_row # 0-based, exclusive
 function MergeSession:_range(entry, conflict)
-  if entry.bufnr and conflict.extmark and api.nvim_buf_is_valid(entry.bufnr) then
-    local mark = api.nvim_buf_get_extmark_by_id(
-      entry.bufnr,
-      self.namespace,
-      conflict.extmark,
-      { details = true }
-    )
-    if mark and #mark > 0 then
-      return mark[1], mark[3].end_row or mark[1]
-    end
-  end
-  return conflict.start_line - 1, conflict.end_line
+  return self.projection:range(entry.path, conflict)
 end
 
 ---@param entry MergeSession.Entry
 ---@param conflict MergeSession.Conflict
 function MergeSession:_place_mark(entry, conflict)
-  if not (entry.bufnr and api.nvim_buf_is_valid(entry.bufnr)) then
-    return
-  end
-  local start_row, end_row = self:_range(entry, conflict)
-  if conflict.extmark then
-    pcall(api.nvim_buf_del_extmark, entry.bufnr, self.namespace, conflict.extmark)
-  end
-  local virt_line
-  if conflict.resolved then
-    virt_line = {
-      { (" ✔ %s "):format(conflict.choice or "manual"), "DiffviewFilePanelInsertions" },
-      { " ", "Normal" },
-      { conflict.choice == "ours" and "[ ✔ OURS ]" or "[ OURS ]", "DiffviewFilePanelInsertions" },
-      { " ", "Normal" },
-      {
-        conflict.choice == "theirs" and "[ ✔ THEIRS ]" or "[ THEIRS ]",
-        "DiffviewFilePanelDeletions",
-      },
-    }
-  else
-    virt_line = {
-      { (" Unresolved %d "):format(conflict.id), "DiagnosticError" },
-      { " ", "Normal" },
-      { "[ OURS ]", "DiffviewFilePanelInsertions" },
-      { " ", "Normal" },
-      { "[ THEIRS ]", "DiffviewFilePanelDeletions" },
-    }
-  end
-  conflict.extmark = api.nvim_buf_set_extmark(entry.bufnr, self.namespace, start_row, 0, {
-    end_row = end_row,
-    end_col = 0,
-    virt_lines = { virt_line },
-    virt_lines_above = true,
-    right_gravity = false,
-    end_right_gravity = true,
-  })
+  self.projection:place(entry.path, conflict)
 end
 
 ---@param path string
@@ -370,7 +325,7 @@ function MergeSession:attach(path, bufnr, file_entry)
   local entry = assert(self.entries[path])
   entry.bufnr = bufnr
   entry.file_entry = file_entry
-  api.nvim_buf_clear_namespace(bufnr, self.namespace, 0, -1)
+  self.projection:attach(path, bufnr)
   for _, conflict in ipairs(entry.conflicts) do
     self:_place_mark(entry, conflict)
   end
@@ -463,6 +418,7 @@ function MergeSession:choose(path, row_or_conflict, choice)
   if not conflict then
     return false
   end
+  self.transaction:set_active(path, conflict.identity)
 
   local content
   if choice == "manual" then
@@ -482,12 +438,7 @@ function MergeSession:choose(path, row_or_conflict, choice)
     conflict.end_line = start_row + #content
   end
 
-  conflict.resolved = true
-  if choice == "none" then
-    conflict.choice = "manual"
-  else
-    conflict.choice = choice --[[@as "ours"|"base"|"theirs"|"all"|"manual"]]
-  end
+  self.transaction:choose(path, assert(conflict.identity), choice)
   self:_place_mark(entry, conflict)
   self:_changed(entry)
   return true
@@ -520,14 +471,13 @@ function MergeSession:choose_side(path, choice)
   entry.result = content
 
   if entry.bufnr and api.nvim_buf_is_valid(entry.bufnr) then
-    api.nvim_buf_clear_namespace(entry.bufnr, self.namespace, 0, -1)
+    self.projection:clear(path)
     api.nvim_buf_set_lines(entry.bufnr, 0, -1, false, content)
   end
 
   for _, conflict in ipairs(entry.conflicts) do
     conflict.resolved = true
     conflict.choice = choice
-    conflict.extmark = nil
   end
   self:_changed(entry)
 end
@@ -539,56 +489,89 @@ end
 ---@return integer? index
 function MergeSession:jump(path, row, delta)
   local entry = assert(self.entries[path])
-  local pending = {}
-  for _, conflict in ipairs(entry.conflicts) do
-    if not conflict.resolved then
-      pending[#pending + 1] = conflict
+  if not self.transaction.active[path] then
+    local current = self:conflict_at(entry, row, true)
+    if current then
+      self.transaction:set_active(path, current.identity)
+      -- Preserve the old first-navigation behaviour: navigation from inside
+      -- a conflict moves past that conflict rather than selecting it again.
+      local start_row, end_row = self:_range(entry, current)
+      if row - 1 < start_row or row - 1 > math.max(start_row, end_row - 1) then
+        self.transaction:set_active(path, nil)
+      end
     end
   end
-  if #pending == 0 then
+  local conflict, index = self.transaction:navigate(path, delta, true)
+  if not conflict then
     return
   end
-
-  local target = delta > 0 and 1 or #pending
-  local cursor_row = row - 1
-  for index, conflict in ipairs(pending) do
-    local start_row, end_row = self:_range(entry, conflict)
-    if cursor_row >= start_row and cursor_row <= math.max(start_row, end_row - 1) then
-      target = (index + (delta > 0 and 1 or -1) - 1) % #pending + 1
-      break
-    elseif delta > 0 and start_row > cursor_row then
-      target = index
-      break
-    elseif delta < 0 and start_row < cursor_row then
-      target = index
-    end
-  end
-  local start_row = self:_range(entry, pending[target])
-  return start_row + 1, target
+  local start_row = self:_range(entry, conflict)
+  return start_row + 1, index
 end
 
 ---@return boolean ok
 ---@return string? err
-function MergeSession:apply()
-  local unresolved = self:counts()
-  if unresolved > 0 then
-    return false, ("%d conflict(s) are still unresolved"):format(unresolved)
-  end
-
+function MergeSession:validate()
+  self.transaction:set_report("validating", "running")
+  self.transaction:clear_stale()
   for _, path in ipairs(self.order) do
     local entry = self.entries[path]
+    local target = lstat(entry.absolute_path)
+    if target and target.type == "link" then
+      local message = ("Refusing to replace symlink: %s"):format(path)
+      self.transaction:mark_stale(path, "worktree", message)
+      self.transaction:set_report("failed", "stale", message)
+      return false, message
+    end
     for stage = 1, 3 do
       if read_stage_oid(self.adapter, path, stage) ~= entry.stage_oids[stage] then
-        return false,
-          ("Git index changed outside the merge session: %s (stage %d)"):format(path, stage)
+        local message = ("Git index changed outside the merge session: %s (stage %d)"):format(
+          path,
+          stage
+        )
+        self.transaction:mark_stale(path, "index", message)
+        self.transaction:set_report("failed", "stale", message)
+        return false, message
       end
     end
     local current_bytes, stat = read_file_snapshot(entry.absolute_path)
     if (stat ~= nil) ~= entry.existed or current_bytes ~= entry.original_bytes then
-      return false, ("Working-tree file changed outside the merge session: %s"):format(path)
+      local message = ("Working-tree file changed outside the merge session: %s"):format(path)
+      self.transaction:mark_stale(path, "worktree", message)
+      self.transaction:set_report("failed", "stale", message)
+      return false, message
     end
   end
+  self.transaction:set_report("validating", "ok")
+  return true
+end
 
+---@return boolean ok
+---@return string? err
+---@return table report
+function MergeSession:apply()
+  local unresolved = self:counts()
+  if unresolved > 0 then
+    local message = ("%d conflict(s) are still unresolved"):format(unresolved)
+    self.transaction:set_report("failed", "unresolved", message)
+    return false, message, self.transaction.report
+  end
+
+  local valid, validation_err = self:validate()
+  if not valid then
+    return false, validation_err, self.transaction.report
+  end
+
+  self.transaction:set_report("preparing", "running")
+  self.transaction.report.files = {}
+  self.transaction.report.rollback_failures = {}
+  self.transaction.report.atomicity =
+    "All results are prepared first; each path is atomically renamed; cross-file rollback is best effort."
+  self.transaction.report.metadata = {
+    permissions = "preserved",
+    symlinks = "rejected",
+    acl_xattr = "best-effort (platform APIs do not provide a portable guarantee)",
+  }
   local prepared = {}
   for _, path in ipairs(self.order) do
     local entry = self.entries[path]
@@ -609,35 +592,107 @@ function MergeSession:apply()
       for _, item in ipairs(prepared) do
         vim.fn.delete(item.temp)
       end
-      return false, ("Could not prepare result for '%s': %s"):format(path, err or "")
+      local message = ("Could not prepare result for '%s': %s"):format(path, err or "")
+      self.transaction:set_report("failed", "prepare_failed", message)
+      return false, message, self.transaction.report
     end
-    prepared[#prepared + 1] = { entry = entry, temp = temp_path, bytes = bytes }
+    if entry.mode then
+      local chmod_ok, chmod_err = vim.uv.fs_chmod(temp_path, entry.mode)
+      if not chmod_ok then
+        vim.fn.delete(temp_path)
+        for _, item in ipairs(prepared) do
+          vim.fn.delete(item.temp)
+        end
+        local message = ("Could not preserve permissions for '%s': %s"):format(
+          path,
+          chmod_err or ""
+        )
+        self.transaction:set_report("failed", "prepare_failed", message)
+        return false, message, self.transaction.report
+      end
+    end
+    local item = {
+      entry = entry,
+      temp = temp_path,
+      backup = entry.absolute_path .. (".diffview-backup-%d"):format(vim.uv.hrtime()),
+      bytes = bytes,
+    }
+    prepared[#prepared + 1] = item
+    self.transaction.report.files[path] = { status = "prepared" }
   end
 
+  self.transaction:set_report("writing", "running")
   local applied = {}
-  for _, item in ipairs(prepared) do
-    local ok, err = vim.uv.fs_rename(item.temp, item.entry.absolute_path)
-    if not ok then
-      for _, rollback in ipairs(applied) do
-        if rollback.entry.existed then
-          write_bytes(
-            rollback.entry.absolute_path,
-            rollback.entry.original_bytes or "",
-            rollback.entry.mode
-          )
-        else
-          vim.fn.delete(rollback.entry.absolute_path)
+  local function rollback_applied()
+    for index = #applied, 1, -1 do
+      local rollback = applied[index]
+      vim.fn.delete(rollback.entry.absolute_path)
+      if rollback.entry.existed then
+        local restored, restore_err =
+          vim.uv.fs_rename(rollback.backup, rollback.entry.absolute_path)
+        if not restored then
+          self.transaction.report.rollback_failures[#self.transaction.report.rollback_failures + 1] =
+            {
+              path = rollback.entry.path,
+              error = restore_err,
+            }
         end
       end
+    end
+  end
+  for _, item in ipairs(prepared) do
+    if item.entry.existed then
+      local backup_ok, backup_err = vim.uv.fs_rename(item.entry.absolute_path, item.backup)
+      if not backup_ok then
+        rollback_applied()
+        for _, pending in ipairs(prepared) do
+          vim.fn.delete(pending.temp)
+        end
+        local message = ("Could not create rollback backup for '%s': %s"):format(
+          item.entry.path,
+          backup_err or ""
+        )
+        self.transaction.report.files[item.entry.path].status = "backup_failed"
+        self.transaction:set_report("failed", "write_failed", message)
+        return false, message, self.transaction.report
+      end
+    end
+    local ok, err = vim.uv.fs_rename(item.temp, item.entry.absolute_path)
+    if not ok then
+      if item.entry.existed then
+        local restored, restore_err = vim.uv.fs_rename(item.backup, item.entry.absolute_path)
+        if not restored then
+          self.transaction.report.rollback_failures[#self.transaction.report.rollback_failures + 1] =
+            {
+              path = item.entry.path,
+              error = restore_err,
+            }
+        end
+      end
+      rollback_applied()
       for _, pending in ipairs(prepared) do
         vim.fn.delete(pending.temp)
       end
-      return false, ("Could not apply result for '%s': %s"):format(item.entry.path, err or "")
+      local message = ("Could not apply result for '%s': %s"):format(item.entry.path, err or "")
+      if #self.transaction.report.rollback_failures > 0 then
+        message = message
+          .. ("; rollback failed for %d file(s)"):format(#self.transaction.report.rollback_failures)
+      end
+      self.transaction.report.files[item.entry.path].status = "write_failed"
+      self.transaction:set_report("failed", "write_failed", message)
+      return false, message, self.transaction.report
     end
     applied[#applied + 1] = item
+    self.transaction.report.files[item.entry.path].status = "applied"
   end
 
-  return true
+  for _, item in ipairs(applied) do
+    if item.entry.existed then
+      vim.fn.delete(item.backup)
+    end
+  end
+  self.transaction:set_report("applied", "ok")
+  return true, nil, self.transaction.report
 end
 
 M.MergeSession = MergeSession

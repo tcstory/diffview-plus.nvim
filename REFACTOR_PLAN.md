@@ -510,14 +510,14 @@ require("diffview").setup({
 
 ### Phase 9：MergeView 迁移与事务增强
 
-- [ ] MergeTransaction 迁入纯 domain state machine。
-- [ ] 冲突 region、选择和 extmark projection 分离。
-- [ ] 所有冲突操作进入可点击 action bar 和 conflict row。
-- [ ] previous/next 基于 transaction conflict identity，不基于易漂移行号。
-- [ ] Apply 实现 prepare/validate/write/report，并暴露 rollback failure。
-- [ ] 明确多文件原子性边界；能原子替换的文件先 prepare 完成再 commit。
-- [ ] 处理权限、symlink、ACL/xattr 的保留策略并写平台测试。
-- [ ] index/worktree stale 状态以 UI banner 呈现，可 refresh/reopen/discard。
+- [x] MergeTransaction 迁入纯 domain state machine。
+- [x] 冲突 region、选择和 extmark projection 分离。
+- [x] 所有冲突操作进入可点击 action bar 和 conflict row。
+- [x] previous/next 基于 transaction conflict identity，不基于易漂移行号。
+- [x] Apply 实现 prepare/validate/write/report，并暴露 rollback failure。
+- [x] 明确多文件原子性边界；能原子替换的文件先 prepare 完成再 commit。
+- [x] 处理权限、symlink、ACL/xattr 的保留策略并写平台测试。
+- [x] index/worktree stale 状态以 UI banner 呈现，可 refresh/reopen/discard。
 
 验收：完整冲突解决流程只用点击可完成；所有失败都有明确状态；不会静默覆盖外部修改。
 

@@ -187,25 +187,31 @@ function MergeView:_install_click_handlers()
     local start_row = self.merge_session:_range(current, conflict)
     local status = conflict.resolved and (" ✔ %s "):format(conflict.choice or "manual")
       or (" Unresolved %d "):format(conflict.id)
-    local ours = conflict.resolved and conflict.choice == "ours" and "[ ✔ OURS ]" or "[ OURS ]"
-    local theirs = conflict.resolved and conflict.choice == "theirs" and "[ ✔ THEIRS ]"
-      or "[ THEIRS ]"
-    local spans = router.segment_spans({
-      { text = status },
-      { text = " " },
-      { text = ours },
-      { text = " " },
-      { text = theirs },
-    })
-    for index, action in pairs({ [3] = "merge.choose_ours", [5] = "merge.choose_theirs" }) do
+    local segments = { { text = status } }
+    local indexes = {}
+    for _, choice in ipairs({ "ours", "base", "theirs", "all", "manual" }) do
+      segments[#segments + 1] = { text = " " }
+      indexes[#indexes + 1] = #segments + 1
+      local selected = conflict.resolved and conflict.choice == choice
+      segments[#segments + 1] = {
+        text = selected and ("[ ✔ %s ]"):format(choice:upper())
+          or ("[ %s ]"):format(choice:upper()),
+      }
+    end
+    local spans = router.segment_spans(segments)
+    for choice_index, segment_index in ipairs(indexes) do
+      local choice = ({ "ours", "base", "theirs", "all", "manual" })[choice_index]
+      local identity = assert(conflict.identity)
       router.register({
         owner = self,
-        action = action,
+        handler = function()
+          return self:choose_conflict_id(identity, choice)
+        end,
         bufnr = current.bufnr,
         line = start_row + 1,
         cursor_line = start_row + 1,
-        start_col = spans[index].start_col,
-        end_col = spans[index].end_col,
+        start_col = spans[segment_index].start_col,
+        end_col = spans[segment_index].end_col,
         virtual = true,
       })
     end
@@ -241,13 +247,69 @@ function MergeView:update_merge_ui()
     local apply_label = unresolved == 0
         and router.winbar(apply, "[ ✔ APPLY CHANGES ]", "DiffviewFilePanelInsertions")
       or router.winbar(apply, "[ APPLY ]")
+    local action_buttons = {}
+    for _, choice in ipairs({ "ours", "base", "theirs", "all", "manual" }) do
+      local route = router.register({
+        owner = self._winbar_routes,
+        handler = function()
+          return self:choose_active_conflict(choice)
+        end,
+      })
+      action_buttons[#action_buttons + 1] = router.winbar(route, ("[ %s ]"):format(choice:upper()))
+    end
+    for _, choice in ipairs({ "ours", "base", "theirs" }) do
+      local route = router.register({
+        owner = self._winbar_routes,
+        handler = function()
+          self:choose_all_conflicts(choice)
+          return true
+        end,
+      })
+      action_buttons[#action_buttons + 1] =
+        router.winbar(route, ("[ ALL→%s ]"):format(choice:upper()))
+    end
     local counts = ("  %%<FILE %d/%d unresolved | ALL %d/%d"):format(
       file_remaining,
       file_total,
       unresolved,
       total
     )
-    entry_layout.b.file.winbar = "RESULT  " .. nav_buttons .. "  " .. apply_label .. counts
+    local stale = self.merge_session.transaction.stale[entry.path]
+    local banner = ""
+    if stale then
+      local refresh = router.register({
+        owner = self._winbar_routes,
+        handler = function()
+          return self:refresh_transaction_status()
+        end,
+      })
+      local reopen = router.register({
+        owner = self._winbar_routes,
+        handler = function()
+          return self:reopen_transaction()
+        end,
+      })
+      local discard = router.register({
+        owner = self._winbar_routes,
+        handler = function()
+          return self:discard_transaction()
+        end,
+      })
+      banner = "  "
+        .. router.winbar(refresh, "[ STALE: REFRESH ]", "DiagnosticError")
+        .. " "
+        .. router.winbar(reopen, "[ REOPEN ]")
+        .. " "
+        .. router.winbar(discard, "[ DISCARD ]")
+    end
+    entry_layout.b.file.winbar = "RESULT  "
+      .. nav_buttons
+      .. "  "
+      .. table.concat(action_buttons, " ")
+      .. "  "
+      .. apply_label
+      .. counts
+      .. banner
     local current_layout = self.cur_layout --[[@as Diff1|Diff2|Diff3|Diff4|nil]]
     if current_layout and current_layout.b and current_layout.b.file then
       current_layout.b.file.winbar = entry_layout.b.file.winbar
@@ -333,6 +395,40 @@ function MergeView:choose_conflict(choice)
   return changed
 end
 
+---@param identity string
+---@param choice "ours"|"base"|"theirs"|"all"|"manual"|"none"
+---@return boolean
+function MergeView:choose_conflict_id(identity, choice)
+  if not self.cur_entry then
+    return false
+  end
+  local current = self.merge_session:get(self.cur_entry.path)
+  local conflict = current
+    and self.merge_session.transaction:conflict(self.cur_entry.path, identity)
+  if not conflict then
+    return false
+  end
+  local changed = self.merge_session:choose(self.cur_entry.path, conflict, choice)
+  if changed and self.cur_layout then
+    self.cur_layout:sync_scroll()
+  end
+  return changed
+end
+
+---@param choice "ours"|"base"|"theirs"|"all"|"manual"|"none"
+---@return boolean
+function MergeView:choose_active_conflict(choice)
+  if not self.cur_entry then
+    return false
+  end
+  local path = self.cur_entry.path
+  local identity = self.merge_session.transaction.active[path]
+  if identity then
+    return self:choose_conflict_id(identity, choice)
+  end
+  return self:choose_conflict(choice)
+end
+
 ---@param choice "ours"|"base"|"theirs"|"all"|"manual"|"none"
 function MergeView:choose_all_conflicts(choice)
   if not self.cur_entry then
@@ -390,9 +486,12 @@ function MergeView:jump_conflict(delta)
 end
 
 function MergeView:apply_all()
-  local ok, err = self.merge_session:apply()
+  local ok, err, report = self.merge_session:apply()
   if not ok then
-    utils.err(err or "Unable to apply merge results")
+    self:update_merge_ui()
+    local rollback = report and report.rollback_failures or {}
+    local suffix = #rollback > 0 and (" (%d rollback failure(s))"):format(#rollback) or ""
+    utils.err((err or "Unable to apply merge results") .. suffix)
     return false
   end
 
@@ -404,6 +503,52 @@ function MergeView:apply_all()
     end
   end
   utils.info("All merge results were applied to the working tree.")
+  local tabpage = self.tabpage
+  vim.schedule(function()
+    require("diffview").close(tabpage, { force = true })
+  end)
+  return true
+end
+
+---@return boolean
+function MergeView:refresh_transaction_status()
+  local ok, err = self.merge_session:validate()
+  self:update_merge_ui()
+  if ok then
+    utils.info("Merge transaction is current.")
+  else
+    utils.warn(err or "Merge transaction is stale.")
+  end
+  return ok
+end
+
+---@return boolean
+function MergeView:reopen_transaction()
+  local fresh = MergeSession(self.adapter, vim.deepcopy(self.merge_session.order))
+  self.merge_session = fresh
+  fresh.on_change = function()
+    self:update_merge_ui()
+  end
+  for _, file_entry in ipairs(self.files.conflicting or {}) do
+    local session_entry = assert(fresh:get(file_entry.path))
+    file_entry.merge_conflicts_remaining = #session_entry.conflicts
+    local layout = file_entry.layout --[[@as Diff3|Diff4]]
+    local result_file = layout.b.file
+    result_file.get_data = function()
+      return vim.deepcopy(session_entry.result)
+    end
+    if result_file.bufnr and api.nvim_buf_is_valid(result_file.bufnr) then
+      api.nvim_buf_set_lines(result_file.bufnr, 0, -1, false, session_entry.result)
+      fresh:attach(file_entry.path, result_file.bufnr, file_entry)
+    end
+  end
+  self:update_merge_ui()
+  utils.info("Merge transaction reopened from the current index and working tree.")
+  return true
+end
+
+---@return boolean
+function MergeView:discard_transaction()
   local tabpage = self.tabpage
   vim.schedule(function()
     require("diffview").close(tabpage, { force = true })
