@@ -145,7 +145,12 @@ describe("diffview.scene.views.diff.merge_view", function()
       local wb_before = vim.api.nvim_win_get_width(view.cur_layout.b.id)
       local wc_before = vim.api.nvim_win_get_width(view.cur_layout.c.id)
 
-      router.dispatch_id(route_id(vim.wo[view.panel.winid].winbar, "[ ◀ ] Hide files"))
+      _G.DiffviewUIRouter(
+        route_id(vim.wo[view.panel.winid].winbar, "[ ◀ ] Hide files"),
+        1,
+        "l",
+        "    "
+      )
       assert.is_true(view.panel:is_open())
       eq(5, vim.api.nvim_win_get_width(view.panel.winid))
       assert.truthy(vim.wo[view.panel.winid].winbar:find("[ ▶ ]", 1, true))
@@ -159,7 +164,7 @@ describe("diffview.scene.views.diff.merge_view", function()
       assert.is_true(math.abs(wa_after - wb_after) <= 2)
       assert.is_true(math.abs(wb_after - wc_after) <= 2)
 
-      router.dispatch_id(route_id(vim.wo[view.panel.winid].winbar, "[ ▶ ]"))
+      _G.DiffviewUIRouter(route_id(vim.wo[view.panel.winid].winbar, "[ ▶ ]"), 1, "l", "    ")
       assert.is_true(view.panel:is_open())
       eq(expanded_width, vim.api.nvim_win_get_width(view.panel.winid))
       assert.truthy(vim.wo[view.panel.winid].winbar:find("[ ◀ ] Hide files", 1, true))

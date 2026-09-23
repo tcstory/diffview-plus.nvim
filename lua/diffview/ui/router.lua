@@ -174,6 +174,11 @@ function M.dispatch_buffer(source, bufnr, fallback_action, mouse)
     if mouse.winid <= 0 or api.nvim_win_get_buf(mouse.winid) ~= bufnr then
       return false
     end
+    -- Winbars, statuslines and window separators report no buffer line.
+    -- Leave those clicks to Neovim so their native %@ handlers can run.
+    if not mouse.line or mouse.line <= 0 then
+      return false
+    end
     line = mouse.line
     local info = vim.fn.getwininfo(mouse.winid)[1]
     cell = mouse.wincol - (info and info.textoff or 0)
@@ -287,7 +292,10 @@ function M._reset()
   next_id = 1
 end
 
-_G.DiffviewUIRouter = function(minwid)
+_G.DiffviewUIRouter = function(minwid, clicks, button)
+  if (button and button ~= "l") or (clicks and tonumber(clicks) ~= 1) then
+    return
+  end
   local id = tonumber(minwid)
   if id then
     return M.dispatch_id(id)

@@ -116,6 +116,43 @@ describe("UI components and router", function()
     vim.api.nvim_buf_delete(mapped_bufnr, { force = true })
   end)
 
+  it("passes winbar clicks to Neovim instead of running a panel fallback", function()
+    local target_bufnr = vim.api.nvim_get_current_buf()
+    local target_winid = vim.api.nvim_get_current_win()
+    local invoked = 0
+    local replayed
+    actions.execute = function()
+      invoked = invoked + 1
+    end
+    vim.api.nvim_feedkeys = function(keys, mode, escape_csi)
+      replayed = { keys, mode, escape_csi }
+    end
+    vim.fn.getmousepos = function()
+      return { winid = target_winid, line = 0, wincol = 3, screenrow = 1 }
+    end
+
+    router.callback("mouse", target_bufnr, "test.select_entry")()
+
+    assert.equals(0, invoked)
+    assert.same({ vim.keycode("<LeftMouse>"), "n", false }, replayed)
+  end)
+
+  it("runs winbar actions once for a left single-click", function()
+    local invoked = 0
+    local id = router.register({
+      handler = function()
+        invoked = invoked + 1
+      end,
+    })
+
+    _G.DiffviewUIRouter(id, 2, "l", "    ")
+    _G.DiffviewUIRouter(id, 1, "r", "    ")
+    assert.equals(0, invoked)
+
+    _G.DiffviewUIRouter(id, 1, "l", "    ")
+    assert.equals(1, invoked)
+  end)
+
   it("uses the target buffer fallback on the first cross-buffer click", function()
     local target_bufnr = vim.api.nvim_get_current_buf()
     local target_winid = vim.api.nvim_get_current_win()
