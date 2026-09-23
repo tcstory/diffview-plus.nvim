@@ -197,6 +197,15 @@ describe("diffview.scene.views.diff.merge_view", function()
       local start_row = view.merge_session:_range(session_entry, conflict)
       local target_line = start_row + 1
       local result_win = view.cur_layout.b.id
+      local source_win = view.cur_layout.a.id
+      local source_bufnr = vim.api.nvim_win_get_buf(source_win)
+      local click_from_source = router.callback("mouse", source_bufnr)
+      local source_has_mouse_map = vim
+        .iter(vim.api.nvim_buf_get_keymap(source_bufnr, "n"))
+        :any(function(map)
+          return map.lhs == "<LeftMouse>" and map.expr == 1
+        end)
+      assert.is_true(source_has_mouse_map)
       local wininfo = vim.fn.getwininfo(result_win)[1]
       local textoff = wininfo and wininfo.textoff or 0
       local status_w = vim.fn.strdisplaywidth((" Unresolved %d "):format(conflict.id))
@@ -218,15 +227,16 @@ describe("diffview.scene.views.diff.merge_view", function()
             screenrow = sp.row, -- on the code line, NOT the virtual line
           }
         end
-        local handled = router.dispatch_buffer("mouse", session_entry.bufnr)
+        vim.api.nvim_set_current_win(source_win)
+        local handled = click_from_source()
         eq(false, conflict.resolved)
         eq(nil, conflict.choice)
-        eq(false, handled or false)
+        eq("<LeftMouse>", handled)
       end
 
       -- Simulate click on [ OURS ] button on the virtual line above the conflict
       local virt_screenrow = (sp and sp.row > 0) and sp.row - 1 or 0
-      vim.api.nvim_set_current_win(view.cur_layout.a.id)
+      vim.api.nvim_set_current_win(source_win)
       vim.fn.getmousepos = function()
         return {
           winid = result_win,
@@ -237,10 +247,11 @@ describe("diffview.scene.views.diff.merge_view", function()
         }
       end
 
-      local handled_ours = router.dispatch_buffer("mouse", session_entry.bufnr)
+      local handled_ours = click_from_source()
       vim.fn.getmousepos = orig_getmousepos
 
-      eq(true, handled_ours)
+      eq("", handled_ours)
+      eq(result_win, vim.api.nvim_get_current_win())
       assert.is_true(vim.wait(1000, function()
         return conflict.resolved and conflict.choice == "ours"
       end))
@@ -252,6 +263,7 @@ describe("diffview.scene.views.diff.merge_view", function()
       local resolved_status_w = vim.fn.strdisplaywidth(" ✔ ours ")
       local ours_w = vim.fn.strdisplaywidth("[ ✔ OURS ]")
       local base_w = vim.fn.strdisplaywidth("[ BASE ]")
+      vim.api.nvim_set_current_win(source_win)
       vim.fn.getmousepos = function()
         return {
           winid = result_win,
@@ -262,10 +274,10 @@ describe("diffview.scene.views.diff.merge_view", function()
         }
       end
 
-      local handled_theirs = router.dispatch_buffer("mouse", session_entry.bufnr)
+      local handled_theirs = click_from_source()
       vim.fn.getmousepos = orig_getmousepos
 
-      eq(true, handled_theirs)
+      eq("", handled_theirs)
       assert.is_true(vim.wait(1000, function()
         return conflict.choice == "theirs"
       end))

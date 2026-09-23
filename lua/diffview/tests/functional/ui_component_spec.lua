@@ -2,7 +2,14 @@ local component = require("diffview.ui.component")
 local router = require("diffview.ui.router")
 
 describe("UI components and router", function()
+  local original_getmousepos
+
+  before_each(function()
+    original_getmousepos = vim.fn.getmousepos
+  end)
+
   after_each(function()
+    vim.fn.getmousepos = original_getmousepos
     router._reset()
   end)
 
@@ -49,5 +56,51 @@ describe("UI components and router", function()
     assert.equals(2, router.size())
     router.unregister_owner(owner)
     assert.equals(0, router.size())
+  end)
+
+  it("routes the first click to a control in a different buffer", function()
+    local target_bufnr = vim.api.nvim_get_current_buf()
+    local target_winid = vim.api.nvim_get_current_win()
+    local mapped_bufnr = vim.api.nvim_create_buf(false, true)
+    local mapped_winid = vim.api.nvim_open_win(mapped_bufnr, true, {
+      relative = "editor",
+      row = 1,
+      col = 1,
+      width = 10,
+      height = 2,
+    })
+    local invoked = 0
+    router.register({
+      bufnr = target_bufnr,
+      line = 1,
+      start_col = 1,
+      end_col = 8,
+      handler = function()
+        invoked = invoked + 1
+      end,
+    })
+    vim.fn.getmousepos = function()
+      return { winid = target_winid, line = 1, wincol = 1, screenrow = 1 }
+    end
+
+    local result = router.callback("mouse", mapped_bufnr)()
+
+    assert.equals("", result)
+    assert.equals(1, invoked)
+    assert.equals(target_winid, vim.api.nvim_get_current_win())
+    assert.equals(1, vim.api.nvim_win_get_cursor(target_winid)[1])
+    vim.api.nvim_win_close(mapped_winid, true)
+    vim.api.nvim_buf_delete(mapped_bufnr, { force = true })
+  end)
+
+  it("returns unhandled clicks to Neovim for native focus behaviour", function()
+    local target_winid = vim.api.nvim_get_current_win()
+    local mapped_bufnr = vim.api.nvim_create_buf(false, true)
+    vim.fn.getmousepos = function()
+      return { winid = target_winid, line = 1, wincol = 1, screenrow = 1 }
+    end
+
+    assert.equals("<LeftMouse>", router.callback("mouse", mapped_bufnr)())
+    vim.api.nvim_buf_delete(mapped_bufnr, { force = true })
   end)
 end)

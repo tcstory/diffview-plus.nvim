@@ -189,11 +189,18 @@ function MergeView:_install_click_handlers()
     return
   end
 
-  vim.keymap.set("n", "<LeftMouse>", router.callback("mouse", current.bufnr), {
-    buffer = current.bufnr,
-    silent = true,
-    nowait = true,
-  })
+  local mapped_buffers = {}
+  for _, file in ipairs(entry.layout:files()) do
+    if file.bufnr and api.nvim_buf_is_valid(file.bufnr) and not mapped_buffers[file.bufnr] then
+      mapped_buffers[file.bufnr] = true
+      vim.keymap.set("n", "<LeftMouse>", router.callback("mouse", file.bufnr), {
+        buffer = file.bufnr,
+        expr = true,
+        silent = true,
+        nowait = true,
+      })
+    end
+  end
   for _, conflict in ipairs(current.conflicts) do
     local start_row = self.merge_session:_range(current, conflict)
     local status = conflict.resolved and (" ✔ %s "):format(conflict.choice or "manual")
