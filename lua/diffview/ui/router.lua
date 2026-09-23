@@ -11,6 +11,10 @@ local next_id = 1
 local routes = {}
 ---@type table<any, table<integer, true>>
 local owners = setmetatable({}, { __mode = "k" })
+---@type table<integer, string>
+local mouse_fallbacks = {}
+---@type table<integer, true>
+local mouse_fallback_watchers = {}
 
 local function remember(owner, id)
   if not owner then
@@ -132,6 +136,32 @@ local function focus_mouse_target(mouse)
   end
 end
 
+---@param bufnr integer
+---@param action? string
+local function remember_mouse_fallback(bufnr, action)
+  if not action then
+    return
+  end
+  mouse_fallbacks[bufnr] = action
+  if mouse_fallback_watchers[bufnr] or not api.nvim_buf_is_valid(bufnr) then
+    return
+  end
+  mouse_fallback_watchers[bufnr] = true
+  api.nvim_create_autocmd("BufWipeout", {
+    buffer = bufnr,
+    once = true,
+    callback = function()
+      mouse_fallbacks[bufnr] = nil
+      mouse_fallback_watchers[bufnr] = nil
+    end,
+  })
+end
+
+local function replay_native_mouse()
+  local key = api.nvim_replace_termcodes("<LeftMouse>", true, false, true)
+  api.nvim_feedkeys(key, "n", false)
+end
+
 ---@param source "keyboard"|"mouse"
 ---@param bufnr integer
 ---@param fallback_action? string
@@ -174,8 +204,8 @@ function M.dispatch_buffer(source, bufnr, fallback_action, mouse)
     local view = require("diffview.lib").get_current_view()
     local result = actions.execute(fallback_action, view)
     -- A mouse fallback is handled even when the action itself has no return
-    -- value. This prevents an expression mapping from replaying the click and
-    -- executing both the action and native mouse handling.
+    -- value. The callback uses this signal to avoid replaying the same click
+    -- through Neovim's native mouse handling.
     return source == "mouse" and true or result
   end
   return false
@@ -186,7 +216,7 @@ end
 ---This is important when clicking directly from one Diffview pane into a
 ---button in another pane: mapping lookup still belongs to the old buffer.
 ---@param mapped_bufnr integer Buffer that supplied the local mapping.
----@param fallback_action? string Only applies when the click targets mapped_bufnr.
+---@param fallback_action? string Fallback supplied by the mapped buffer.
 ---@return boolean handled
 function M.dispatch_mouse(mapped_bufnr, fallback_action)
   local mouse = vim.fn.getmousepos()
@@ -194,7 +224,10 @@ function M.dispatch_mouse(mapped_bufnr, fallback_action)
     return false
   end
   local target_bufnr = api.nvim_win_get_buf(mouse.winid)
-  local fallback = target_bufnr == mapped_bufnr and fallback_action or nil
+  local fallback = mouse_fallbacks[target_bufnr]
+  if target_bufnr == mapped_bufnr and fallback_action then
+    fallback = fallback_action
+  end
   return M.dispatch_buffer("mouse", target_bufnr, fallback, mouse) == true
 end
 
@@ -203,11 +236,18 @@ end
 ---@param fallback_action? string
 ---@return function
 function M.callback(source, bufnr, fallback_action)
+  if source == "mouse" then
+    remember_mouse_fallback(bufnr, fallback_action)
+  end
   return function()
     if source == "mouse" then
-      -- Callers install this as an expression mapping. An unhandled click is
-      -- returned to Neovim so ordinary focus/cursor behaviour is preserved.
-      return M.dispatch_mouse(bufnr, fallback_action) and "" or "<LeftMouse>"
+      -- Keep mouse mappings non-expression so routed actions may change text
+      -- and windows. Replay unhandled clicks without remapping to preserve
+      -- Neovim's native focus/cursor behaviour without recursing here.
+      if not M.dispatch_mouse(bufnr, fallback_action) then
+        replay_native_mouse()
+      end
+      return
     end
     return M.dispatch_buffer(source, bufnr, fallback_action)
   end
@@ -242,6 +282,8 @@ end
 function M._reset()
   routes = {}
   owners = setmetatable({}, { __mode = "k" })
+  mouse_fallbacks = {}
+  mouse_fallback_watchers = {}
   next_id = 1
 end
 

@@ -1,15 +1,22 @@
 local component = require("diffview.ui.component")
 local router = require("diffview.ui.router")
+local actions = require("diffview.runtime.action_registry")
 
 describe("UI components and router", function()
   local original_getmousepos
+  local original_feedkeys
+  local original_execute
 
   before_each(function()
     original_getmousepos = vim.fn.getmousepos
+    original_feedkeys = vim.api.nvim_feedkeys
+    original_execute = actions.execute
   end)
 
   after_each(function()
     vim.fn.getmousepos = original_getmousepos
+    vim.api.nvim_feedkeys = original_feedkeys
+    actions.execute = original_execute
     router._reset()
   end)
 
@@ -85,7 +92,7 @@ describe("UI components and router", function()
 
     local result = router.callback("mouse", mapped_bufnr)()
 
-    assert.equals("", result)
+    assert.is_nil(result)
     assert.equals(1, invoked)
     assert.equals(target_winid, vim.api.nvim_get_current_win())
     assert.equals(1, vim.api.nvim_win_get_cursor(target_winid)[1])
@@ -93,14 +100,48 @@ describe("UI components and router", function()
     vim.api.nvim_buf_delete(mapped_bufnr, { force = true })
   end)
 
-  it("returns unhandled clicks to Neovim for native focus behaviour", function()
+  it("replays unhandled clicks without remapping for native focus behaviour", function()
     local target_winid = vim.api.nvim_get_current_win()
     local mapped_bufnr = vim.api.nvim_create_buf(false, true)
+    local replayed
+    vim.api.nvim_feedkeys = function(keys, mode, escape_csi)
+      replayed = { keys, mode, escape_csi }
+    end
     vim.fn.getmousepos = function()
       return { winid = target_winid, line = 1, wincol = 1, screenrow = 1 }
     end
 
-    assert.equals("<LeftMouse>", router.callback("mouse", mapped_bufnr)())
+    assert.is_nil(router.callback("mouse", mapped_bufnr)())
+    assert.same({ vim.keycode("<LeftMouse>"), "n", false }, replayed)
+    vim.api.nvim_buf_delete(mapped_bufnr, { force = true })
+  end)
+
+  it("uses the target buffer fallback on the first cross-buffer click", function()
+    local target_bufnr = vim.api.nvim_get_current_buf()
+    local target_winid = vim.api.nvim_get_current_win()
+    local mapped_bufnr = vim.api.nvim_create_buf(false, true)
+    local mapped_winid = vim.api.nvim_open_win(mapped_bufnr, true, {
+      relative = "editor",
+      row = 1,
+      col = 1,
+      width = 10,
+      height = 2,
+    })
+    local invoked = 0
+    actions.execute = function(action)
+      assert.equals("test.select_entry", action)
+      invoked = invoked + 1
+    end
+    router.callback("mouse", target_bufnr, "test.select_entry")
+    vim.fn.getmousepos = function()
+      return { winid = target_winid, line = 1, wincol = 1, screenrow = 1 }
+    end
+
+    router.callback("mouse", mapped_bufnr)()
+
+    assert.equals(1, invoked)
+    assert.equals(target_winid, vim.api.nvim_get_current_win())
+    vim.api.nvim_win_close(mapped_winid, true)
     vim.api.nvim_buf_delete(mapped_bufnr, { force = true })
   end)
 end)

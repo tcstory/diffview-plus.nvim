@@ -590,7 +590,6 @@ function Panel:apply_keymaps(keymap_key, extra_defaults)
       rhs = require("diffview.ui.router").callback("keyboard", self.bufid, mapping[5])
     elseif mapping[2] == "<LeftMouse>" then
       rhs = require("diffview.ui.router").callback("mouse", self.bufid, mapping[5])
-      opt.expr = true
     end
     vim.keymap.set(mapping[1], mapping[2], rhs, opt)
   end

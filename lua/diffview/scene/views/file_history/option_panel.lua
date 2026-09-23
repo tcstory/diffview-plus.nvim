@@ -170,7 +170,7 @@ function FHOptionPanel:setup_buffer()
     "n",
     "<LeftMouse>",
     require("diffview.ui.router").callback("mouse", self.bufid, "navigation.select_entry"),
-    { silent = true, buffer = self.bufid, expr = true }
+    { silent = true, buffer = self.bufid }
   )
 
   for _, group in pairs(self.flags) do

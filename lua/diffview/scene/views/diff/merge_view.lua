@@ -195,7 +195,6 @@ function MergeView:_install_click_handlers()
       mapped_buffers[file.bufnr] = true
       vim.keymap.set("n", "<LeftMouse>", router.callback("mouse", file.bufnr), {
         buffer = file.bufnr,
-        expr = true,
         silent = true,
         nowait = true,
       })

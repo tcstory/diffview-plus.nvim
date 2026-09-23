@@ -199,11 +199,10 @@ describe("diffview.scene.views.diff.merge_view", function()
       local result_win = view.cur_layout.b.id
       local source_win = view.cur_layout.a.id
       local source_bufnr = vim.api.nvim_win_get_buf(source_win)
-      local click_from_source = router.callback("mouse", source_bufnr)
       local source_has_mouse_map = vim
         .iter(vim.api.nvim_buf_get_keymap(source_bufnr, "n"))
         :any(function(map)
-          return map.lhs == "<LeftMouse>" and map.expr == 1
+          return map.lhs == "<LeftMouse>" and map.expr == 0
         end)
       assert.is_true(source_has_mouse_map)
       local wininfo = vim.fn.getwininfo(result_win)[1]
@@ -228,10 +227,10 @@ describe("diffview.scene.views.diff.merge_view", function()
           }
         end
         vim.api.nvim_set_current_win(source_win)
-        local handled = click_from_source()
+        local handled = router.dispatch_mouse(source_bufnr)
         eq(false, conflict.resolved)
         eq(nil, conflict.choice)
-        eq("<LeftMouse>", handled)
+        eq(false, handled)
       end
 
       -- Simulate click on [ OURS ] button on the virtual line above the conflict
@@ -247,10 +246,10 @@ describe("diffview.scene.views.diff.merge_view", function()
         }
       end
 
-      local handled_ours = click_from_source()
+      local handled_ours = router.dispatch_mouse(source_bufnr)
       vim.fn.getmousepos = orig_getmousepos
 
-      eq("", handled_ours)
+      eq(true, handled_ours)
       eq(result_win, vim.api.nvim_get_current_win())
       assert.is_true(vim.wait(1000, function()
         return conflict.resolved and conflict.choice == "ours"
@@ -274,10 +273,10 @@ describe("diffview.scene.views.diff.merge_view", function()
         }
       end
 
-      local handled_theirs = click_from_source()
+      local handled_theirs = router.dispatch_mouse(source_bufnr)
       vim.fn.getmousepos = orig_getmousepos
 
-      eq("", handled_theirs)
+      eq(true, handled_theirs)
       assert.is_true(vim.wait(1000, function()
         return conflict.choice == "theirs"
       end))
