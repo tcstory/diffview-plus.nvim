@@ -66,8 +66,8 @@ local StandardViewClass = StandardView.__get()
 ---@field valid boolean
 ---@field update_needed? boolean # Set by external listeners to force a refresh on next redraw.
 ---@field watcher uv_fs_poll_t # UV fs poll handle.
----@field _navigation_winbar_routes? table
----@field _navigation_winbar_bases table<vcs.File, string>
+---@field _conflict_winbar_routes? table
+---@field _conflict_winbar_bases table<vcs.File, string>
 local DiffView = { __name = "DiffView" }
 DiffView.__index = DiffView
 DiffView.super_class = StandardViewClass
@@ -103,8 +103,8 @@ function DiffView:init(opt)
   self.no_panel = opt.no_panel
   self.initialized = false
   self.is_loading = true
-  self._navigation_winbar_routes = {}
-  self._navigation_winbar_bases = setmetatable({}, { __mode = "k" })
+  self._conflict_winbar_routes = {}
+  self._conflict_winbar_bases = setmetatable({}, { __mode = "k" })
   self.options = opt.options or {}
   self.options.selected_file = self.options.selected_file
     and pl:chain(self.options.selected_file):absolute():relative(self.adapter.ctx.toplevel):get()
@@ -327,7 +327,7 @@ end
 ---@diagnostic disable-next-line: unused-local
 function DiffView:file_open_post(e, new_entry, old_entry)
   self.store:set_current(new_entry)
-  self:update_navigation_winbar()
+  self:update_conflict_navigation_winbar()
   if new_entry.layout:is_nulled() then
     return
   end
@@ -377,15 +377,20 @@ function DiffView:file_open_post(e, new_entry, old_entry)
   end
 end
 
----Add previous/next file controls to the LOCAL side's winbar. Routes are
+---Add previous/next conflict controls to the LOCAL side's winbar. Routes are
 ---rebuilt after every file swap because a winbar string embeds its route IDs.
 ---MergeView owns a separate conflict-navigation winbar and is left untouched.
-function DiffView:update_navigation_winbar()
-  router.unregister_owner(self._navigation_winbar_routes)
-  self._navigation_winbar_routes = {}
+function DiffView:update_conflict_navigation_winbar()
+  router.unregister_owner(self._conflict_winbar_routes)
+  self._conflict_winbar_routes = {}
 
   -- Other DiffView-derived tools own their own winbars and navigation model.
-  if self.merge_session or (self.class and self.class ~= DiffView) or not self.cur_layout then
+  if
+    self.merge_session
+    or (self.class and self.class ~= DiffView)
+    or not self.cur_layout
+    or not (self.cur_entry and self.cur_entry.kind == "conflicting")
+  then
     return
   end
 
@@ -401,19 +406,19 @@ function DiffView:update_navigation_winbar()
   end
 
   local prev = router.register({
-    owner = self._navigation_winbar_routes,
-    action = "navigation.select_prev_entry",
+    owner = self._conflict_winbar_routes,
+    action = "navigation.prev_conflict",
   })
   local next = router.register({
-    owner = self._navigation_winbar_routes,
-    action = "navigation.select_next_entry",
+    owner = self._conflict_winbar_routes,
+    action = "navigation.next_conflict",
   })
   local buttons = router.winbar(prev, "[ ◀ ]") .. " " .. router.winbar(next, "[ ▶ ]")
 
   for _, win in ipairs(local_wins) do
     local file = win.file
-    local base = self._navigation_winbar_bases[file] or file.winbar or " LOCAL"
-    self._navigation_winbar_bases[file] = base
+    local base = self._conflict_winbar_bases[file] or file.winbar or " LOCAL"
+    self._conflict_winbar_bases[file] = base
 
     -- Keep the controls beside the side label (not at the far end of a long
     -- path), matching MergeOpen's RESULT winbar and avoiding truncation.
@@ -597,7 +602,7 @@ function DiffView:close(opts)
 
   if not self.closing:check() then
     self.closing:send()
-    router.unregister_owner(self._navigation_winbar_routes)
+    router.unregister_owner(self._conflict_winbar_routes)
 
     -- Final save; the view EffectScope closes the debounced handle.
     if self._save_selections then

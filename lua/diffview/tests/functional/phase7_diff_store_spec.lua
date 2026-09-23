@@ -4,6 +4,7 @@ local FilePanel = require("diffview.scene.views.diff.file_panel").FilePanel
 local component = require("diffview.ui.component")
 local component_renderer = require("diffview.ui.component_renderer")
 local router = require("diffview.ui.router")
+local registry = require("diffview.runtime.action_registry")
 local DiffView = require("diffview.scene.views.diff.diff_view").DiffView
 local RevType = require("diffview.vcs.rev").RevType
 
@@ -161,13 +162,14 @@ describe("Phase 7 DiffView state and controls", function()
     end
   end)
 
-  it("puts previous/next file controls beside the LOCAL winbar label", function()
+  it("routes LOCAL winbar buttons to previous/next conflicts", function()
     local winid = vim.api.nvim_get_current_win()
     local local_file = {
       rev = { type = RevType.LOCAL },
       winbar = " LOCAL (Working tree)",
     }
     local view = {
+      cur_entry = { kind = "conflicting" },
       cur_layout = {
         b = {
           id = winid,
@@ -177,16 +179,31 @@ describe("Phase 7 DiffView state and controls", function()
           end,
         },
       },
-      _navigation_winbar_routes = {},
-      _navigation_winbar_bases = setmetatable({}, { __mode = "k" }),
+      _conflict_winbar_routes = {},
+      _conflict_winbar_bases = setmetatable({}, { __mode = "k" }),
     }
 
-    DiffView.update_navigation_winbar(view)
+    DiffView.update_conflict_navigation_winbar(view)
 
     local plain = vim.fn.substitute(local_file.winbar, "%#[^#]*#", "", "g")
     plain = vim.fn.substitute(plain, "%[0-9]*@v:lua.DiffviewUIRouter@", "", "g")
     plain = plain:gsub("%%X", ""):gsub("%%%*", "")
     assert.equals(" LOCAL  [ ◀ ] [ ▶ ] (Working tree)", plain)
     assert.equals(2, router.size())
+
+    local route_ids = {}
+    for id in local_file.winbar:gmatch("%%(%d+)@v:lua.DiffviewUIRouter@") do
+      route_ids[#route_ids + 1] = tonumber(id)
+    end
+    local executed = {}
+    local original_execute = registry.execute
+    registry.execute = function(id)
+      executed[#executed + 1] = id
+    end
+    router.dispatch_id(route_ids[1])
+    router.dispatch_id(route_ids[2])
+    registry.execute = original_execute
+
+    assert.same({ "navigation.prev_conflict", "navigation.next_conflict" }, executed)
   end)
 end)

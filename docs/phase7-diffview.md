@@ -30,8 +30,9 @@ Unavailable actions remain visible but disabled with a reason from the action
 registry. The Actions control opens the complete context-sensitive palette,
 including each named layout and opening mode. Clicking a file still selects it,
 so the complete open/review/stage/restore flow is available with the mouse.
-Previous/next file-diff controls live beside the `LOCAL` label in the diff
-winbar, where they remain visible independently of the file-panel width.
+For conflicted files, previous/next conflict controls live beside the `LOCAL`
+label in the diff winbar, where they remain visible independently of the
+file-panel width.
 
 ## Filtering
 
