@@ -143,6 +143,8 @@ describe("Phase 7 DiffView state and controls", function()
     end
 
     for _, id in ipairs({
+      "navigation.select_prev_entry",
+      "navigation.select_next_entry",
       "diff.toggle_select_entry",
       "diff.toggle_stage_entry",
       "file.restore_entry",
@@ -157,5 +159,10 @@ describe("Phase 7 DiffView state and controls", function()
     }) do
       assert.is_true(actions[id], id .. " should be visible")
     end
+
+    local toolbar = panel:toolbar_component()
+    local children = component.children(toolbar)
+    assert.equals("[◀ Prev]", component.text(children[1]))
+    assert.equals("[Next ▶]", component.text(children[2]))
   end)
 end)

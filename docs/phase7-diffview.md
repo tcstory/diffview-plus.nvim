@@ -21,6 +21,7 @@ tagged with their source instead of invoking refresh directly.
 The file panel winbar is projected from immutable `ui.component` values by
 `ui.component_renderer` and routed through the single `UIRouter`. It exposes:
 
+- previous/next file-diff navigation;
 - Actions, review marking, hide/show reviewed files, and path filtering;
 - list/tree mode and flattened-directory mode;
 - stage/unstage, restore, and refresh;
