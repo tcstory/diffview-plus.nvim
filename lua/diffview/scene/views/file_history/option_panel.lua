@@ -167,7 +167,7 @@ end
 function FHOptionPanel:setup_buffer()
   self:apply_keymaps("option_panel")
   vim.keymap.set(
-    "n",
+    { "n", "x" },
     "<LeftMouse>",
     require("diffview.ui.router").callback("mouse", self.bufid, "navigation.select_entry"),
     { silent = true, buffer = self.bufid }

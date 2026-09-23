@@ -130,6 +130,10 @@ local function focus_mouse_target(mouse)
   if not (mouse.winid and mouse.winid > 0 and api.nvim_win_is_valid(mouse.winid)) then
     return
   end
+  local mode = api.nvim_get_mode().mode
+  if mode == "v" or mode == "V" or mode == "\22" then
+    api.nvim_feedkeys(api.nvim_replace_termcodes("<Esc>", true, false, true), "nx", false)
+  end
   pcall(api.nvim_set_current_win, mouse.winid)
   if mouse.line and mouse.line > 0 and api.nvim_win_is_valid(mouse.winid) then
     pcall(api.nvim_win_set_cursor, mouse.winid, { mouse.line, 0 })

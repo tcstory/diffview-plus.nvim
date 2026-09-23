@@ -210,6 +210,12 @@ describe("diffview.scene.views.diff.merge_view", function()
           return map.lhs == "<LeftMouse>" and map.expr == 0
         end)
       assert.is_true(source_has_mouse_map)
+      local source_has_visual_mouse_map = vim
+        .iter(vim.api.nvim_buf_get_keymap(source_bufnr, "x"))
+        :any(function(map)
+          return map.lhs == "<LeftMouse>" and map.expr == 0
+        end)
+      assert.is_true(source_has_visual_mouse_map)
       local wininfo = vim.fn.getwininfo(result_win)[1]
       local textoff = wininfo and wininfo.textoff or 0
       local status_w = vim.fn.strdisplaywidth((" Unresolved %d "):format(conflict.id))

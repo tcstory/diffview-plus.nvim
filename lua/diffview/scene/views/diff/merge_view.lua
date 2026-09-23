@@ -193,7 +193,7 @@ function MergeView:_install_click_handlers()
   for _, file in ipairs(entry.layout:files()) do
     if file.bufnr and api.nvim_buf_is_valid(file.bufnr) and not mapped_buffers[file.bufnr] then
       mapped_buffers[file.bufnr] = true
-      vim.keymap.set("n", "<LeftMouse>", router.callback("mouse", file.bufnr), {
+      vim.keymap.set({ "n", "x" }, "<LeftMouse>", router.callback("mouse", file.bufnr), {
         buffer = file.bufnr,
         silent = true,
         nowait = true,

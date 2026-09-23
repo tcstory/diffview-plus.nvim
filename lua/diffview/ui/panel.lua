@@ -585,13 +585,19 @@ function Panel:apply_keymaps(keymap_key, extra_defaults)
     vim.tbl_extend("force", { silent = true, buffer = self.bufid }, extra_defaults or {})
   for _, mapping in ipairs(conf.keymaps[keymap_key]) do
     local opt = vim.tbl_extend("force", default_opt, mapping[4] or {}, { buffer = self.bufid })
+    local mode = mapping[1]
     local rhs = mapping[3]
     if mapping[2] == "<cr>" then
       rhs = require("diffview.ui.router").callback("keyboard", self.bufid, mapping[5])
     elseif mapping[2] == "<LeftMouse>" then
       rhs = require("diffview.ui.router").callback("mouse", self.bufid, mapping[5])
+      local modes = type(mode) == "table" and vim.deepcopy(mode) or { mode }
+      if vim.tbl_contains(modes, "n") and not vim.tbl_contains(modes, "x") then
+        modes[#modes + 1] = "x"
+      end
+      mode = modes
     end
-    vim.keymap.set(mapping[1], mapping[2], rhs, opt)
+    vim.keymap.set(mode, mapping[2], rhs, opt)
   end
   return conf
 end

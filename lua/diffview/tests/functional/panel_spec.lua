@@ -921,6 +921,7 @@ describe("diffview.ui.panel", function()
               test_panel = {
                 { "n", "q", function() end, { desc = "Quit" } },
                 { "n", "j", function() end },
+                { "n", "<LeftMouse>", function() end },
               },
             },
           }
@@ -928,8 +929,8 @@ describe("diffview.ui.panel", function()
 
         local conf = panel:apply_keymaps("test_panel", { nowait = true })
 
-        -- Should have called vim.keymap.set twice.
-        eq(2, #keymap_calls)
+        -- Should have called vim.keymap.set for all three mappings.
+        eq(3, #keymap_calls)
 
         -- First mapping should have desc merged in plus nowait.
         eq("n", keymap_calls[1].mode)
@@ -940,6 +941,11 @@ describe("diffview.ui.panel", function()
 
         -- Second mapping has no desc in the mapping, nowait from defaults.
         eq(true, keymap_calls[2].opts.nowait)
+
+        -- Mouse activation remains available when an accidental drag leaves
+        -- the panel in Visual mode.
+        eq({ "n", "x" }, keymap_calls[3].mode)
+        eq("<LeftMouse>", keymap_calls[3].lhs)
 
         -- Returns the config.
         assert.is_table(conf)

@@ -17,6 +17,10 @@ describe("UI components and router", function()
     vim.fn.getmousepos = original_getmousepos
     vim.api.nvim_feedkeys = original_feedkeys
     actions.execute = original_execute
+    local mode = vim.api.nvim_get_mode().mode
+    if mode == "v" or mode == "V" or mode == "\22" then
+      vim.api.nvim_feedkeys(vim.keycode("<Esc>"), "nx", false)
+    end
     router._reset()
   end)
 
@@ -98,6 +102,29 @@ describe("UI components and router", function()
     assert.equals(1, vim.api.nvim_win_get_cursor(target_winid)[1])
     vim.api.nvim_win_close(mapped_winid, true)
     vim.api.nvim_buf_delete(mapped_bufnr, { force = true })
+  end)
+
+  it("leaves Visual mode before running a routed mouse action", function()
+    local target_bufnr = vim.api.nvim_get_current_buf()
+    local target_winid = vim.api.nvim_get_current_win()
+    local mode_during_action
+    router.register({
+      bufnr = target_bufnr,
+      line = 1,
+      handler = function()
+        mode_during_action = vim.api.nvim_get_mode().mode
+      end,
+    })
+    vim.fn.getmousepos = function()
+      return { winid = target_winid, line = 1, wincol = 1, screenrow = 1 }
+    end
+    vim.api.nvim_feedkeys("v", "nx", false)
+    assert.equals("v", vim.api.nvim_get_mode().mode)
+
+    router.callback("mouse", target_bufnr)()
+
+    assert.equals("n", mode_during_action)
+    assert.equals("n", vim.api.nvim_get_mode().mode)
   end)
 
   it("replays unhandled clicks without remapping for native focus behaviour", function()
