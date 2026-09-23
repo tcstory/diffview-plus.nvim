@@ -4,6 +4,8 @@ local FilePanel = require("diffview.scene.views.diff.file_panel").FilePanel
 local component = require("diffview.ui.component")
 local component_renderer = require("diffview.ui.component_renderer")
 local router = require("diffview.ui.router")
+local DiffView = require("diffview.scene.views.diff.diff_view").DiffView
+local RevType = require("diffview.vcs.rev").RevType
 
 local function file(path, kind)
   return { path = path, kind = kind or "working" }
@@ -143,8 +145,6 @@ describe("Phase 7 DiffView state and controls", function()
     end
 
     for _, id in ipairs({
-      "navigation.select_prev_entry",
-      "navigation.select_next_entry",
       "diff.toggle_select_entry",
       "diff.toggle_stage_entry",
       "file.restore_entry",
@@ -159,10 +159,34 @@ describe("Phase 7 DiffView state and controls", function()
     }) do
       assert.is_true(actions[id], id .. " should be visible")
     end
+  end)
 
-    local toolbar = panel:toolbar_component()
-    local children = component.children(toolbar)
-    assert.equals("[◀ Prev]", component.text(children[1]))
-    assert.equals("[Next ▶]", component.text(children[2]))
+  it("puts previous/next file controls beside the LOCAL winbar label", function()
+    local winid = vim.api.nvim_get_current_win()
+    local local_file = {
+      rev = { type = RevType.LOCAL },
+      winbar = " LOCAL (Working tree)",
+    }
+    local view = {
+      cur_layout = {
+        b = {
+          id = winid,
+          file = local_file,
+          show_winbar_info = function()
+            return true
+          end,
+        },
+      },
+      _navigation_winbar_routes = {},
+      _navigation_winbar_bases = setmetatable({}, { __mode = "k" }),
+    }
+
+    DiffView.update_navigation_winbar(view)
+
+    local plain = vim.fn.substitute(local_file.winbar, "%#[^#]*#", "", "g")
+    plain = vim.fn.substitute(plain, "%[0-9]*@v:lua.DiffviewUIRouter@", "", "g")
+    plain = plain:gsub("%%X", ""):gsub("%%%*", "")
+    assert.equals(" LOCAL  [ ◀ ] [ ▶ ] (Working tree)", plain)
+    assert.equals(2, router.size())
   end)
 end)

@@ -18,6 +18,7 @@ local File = lazy.access("diffview.vcs.file", "File") ---@type vcs.File|LazyModu
 local Capability = require("diffview.vcs.capability").Capability
 local DiffCommand = require("diffview.scene.views.diff.command")
 local DiffStore = require("diffview.scene.views.diff.store").DiffStore
+local router = require("diffview.ui.router")
 
 local api = vim.api
 local await = async.await
@@ -65,6 +66,8 @@ local StandardViewClass = StandardView.__get()
 ---@field valid boolean
 ---@field update_needed? boolean # Set by external listeners to force a refresh on next redraw.
 ---@field watcher uv_fs_poll_t # UV fs poll handle.
+---@field _navigation_winbar_routes? table
+---@field _navigation_winbar_bases table<vcs.File, string>
 local DiffView = { __name = "DiffView" }
 DiffView.__index = DiffView
 DiffView.super_class = StandardViewClass
@@ -100,6 +103,8 @@ function DiffView:init(opt)
   self.no_panel = opt.no_panel
   self.initialized = false
   self.is_loading = true
+  self._navigation_winbar_routes = {}
+  self._navigation_winbar_bases = setmetatable({}, { __mode = "k" })
   self.options = opt.options or {}
   self.options.selected_file = self.options.selected_file
     and pl:chain(self.options.selected_file):absolute():relative(self.adapter.ctx.toplevel):get()
@@ -322,6 +327,7 @@ end
 ---@diagnostic disable-next-line: unused-local
 function DiffView:file_open_post(e, new_entry, old_entry)
   self.store:set_current(new_entry)
+  self:update_navigation_winbar()
   if new_entry.layout:is_nulled() then
     return
   end
@@ -367,6 +373,60 @@ function DiffView:file_open_post(e, new_entry, old_entry)
           work()
         end,
       })
+    end
+  end
+end
+
+---Add previous/next file controls to the LOCAL side's winbar. Routes are
+---rebuilt after every file swap because a winbar string embeds its route IDs.
+---MergeView owns a separate conflict-navigation winbar and is left untouched.
+function DiffView:update_navigation_winbar()
+  router.unregister_owner(self._navigation_winbar_routes)
+  self._navigation_winbar_routes = {}
+
+  -- Other DiffView-derived tools own their own winbars and navigation model.
+  if self.merge_session or (self.class and self.class ~= DiffView) or not self.cur_layout then
+    return
+  end
+
+  local local_wins = {}
+  for _, sym in ipairs({ "a", "b", "c", "d" }) do
+    local win = self.cur_layout[sym]
+    if win and win.file and win.file.rev and win.file.rev.type == RevType.LOCAL then
+      local_wins[#local_wins + 1] = win
+    end
+  end
+  if #local_wins == 0 then
+    return
+  end
+
+  local prev = router.register({
+    owner = self._navigation_winbar_routes,
+    action = "navigation.select_prev_entry",
+  })
+  local next = router.register({
+    owner = self._navigation_winbar_routes,
+    action = "navigation.select_next_entry",
+  })
+  local buttons = router.winbar(prev, "[ ◀ ]") .. " " .. router.winbar(next, "[ ▶ ]")
+
+  for _, win in ipairs(local_wins) do
+    local file = win.file
+    local base = self._navigation_winbar_bases[file] or file.winbar or " LOCAL"
+    self._navigation_winbar_bases[file] = base
+
+    -- Keep the controls beside the side label (not at the far end of a long
+    -- path), matching MergeOpen's RESULT winbar and avoiding truncation.
+    local prefix, suffix = base:match("^(%s*LOCAL)(.*)$")
+    if not prefix then
+      prefix, suffix = base:match("^(%s*WORKING TREE)(.*)$")
+    end
+    local decorated = prefix and (prefix .. "  " .. buttons .. suffix)
+      or (base .. "  " .. buttons)
+    file.winbar = decorated
+
+    if win.id and api.nvim_win_is_valid(win.id) and win:show_winbar_info() then
+      vim.wo[win.id].winbar = decorated
     end
   end
 end
@@ -537,6 +597,7 @@ function DiffView:close(opts)
 
   if not self.closing:check() then
     self.closing:send()
+    router.unregister_owner(self._navigation_winbar_routes)
 
     -- Final save; the view EffectScope closes the debounced handle.
     if self._save_selections then

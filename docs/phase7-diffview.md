@@ -21,7 +21,6 @@ tagged with their source instead of invoking refresh directly.
 The file panel winbar is projected from immutable `ui.component` values by
 `ui.component_renderer` and routed through the single `UIRouter`. It exposes:
 
-- previous/next file-diff navigation;
 - Actions, review marking, hide/show reviewed files, and path filtering;
 - list/tree mode and flattened-directory mode;
 - stage/unstage, restore, and refresh;
@@ -31,6 +30,8 @@ Unavailable actions remain visible but disabled with a reason from the action
 registry. The Actions control opens the complete context-sensitive palette,
 including each named layout and opening mode. Clicking a file still selects it,
 so the complete open/review/stage/restore flow is available with the mouse.
+Previous/next file-diff controls live beside the `LOCAL` label in the diff
+winbar, where they remain visible independently of the file-panel width.
 
 ## Filtering
 

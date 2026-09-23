@@ -63,8 +63,9 @@ Diff buffers intentionally keep Neovim's native motions and diff commands.
 
 1. Open `:DiffviewOpen` and select a file by clicking its row or pressing
    `<CR>` in keyboard mode.
-2. Use the panel toolbar for previous/next diff navigation, Actions, review marking, path filtering,
-   stage/unstage, restore, refresh, and layout selection. Disabled actions show
+2. Use the previous/next buttons beside `LOCAL` to navigate file diffs. The
+   panel toolbar provides Actions, review marking, path filtering, stage/unstage,
+   restore, refresh, and layout selection. Disabled actions show
    why the current adapter or selection cannot run them.
 3. In `:DiffviewFileHistory`, use Filters to change the query, Cancel while it
    streams, and Details / Copy hash / Diff HEAD / Restore for the selected

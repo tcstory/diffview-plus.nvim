@@ -688,8 +688,6 @@ function FilePanel:clear_selections()
 end
 
 local toolbar_controls = {
-  { "navigation.select_prev_entry", "◀ Prev" },
-  { "navigation.select_next_entry", "Next ▶" },
   { "view.action_palette", "Actions" },
   { "diff.toggle_select_entry", "Review" },
   { "diff.toggle_hide_selected", "Hide" },
