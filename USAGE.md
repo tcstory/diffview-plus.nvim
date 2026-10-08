@@ -285,3 +285,30 @@ If you only ever write simple commit messages you could make use of `:h !cmd`:
 ```
 
 <!-- vim: set tw=80 -->
+
+## Image diffs
+
+Git image revisions are previewed automatically when `folke/snacks.nvim` is
+loaded with `image.enabled = true`. Snacks is an optional dependency:
+
+```lua
+require("snacks").setup({ image = { enabled = true } })
+require("diffview").setup()
+```
+
+PNG, JPEG, GIF, WebP, AVIF and SVG files use separate read-only previews for
+each revision, including the index and working tree. Missing sides of added
+or deleted files remain empty. Preview blobs are removed when their buffers
+are wiped or Neovim exits. Text diffs and other binary files keep their normal
+behavior; `diff_binaries` does not need to be enabled for image previews.
+
+Snacks requires a terminal supporting the Kitty graphics protocol, such as
+Kitty, Ghostty or WezTerm. Unsupported terminals show an explanation in the
+preview buffer. ImageMagick is needed for conversion and image metadata.
+Images are displayed visually; no pixel-difference overlay is computed.
+
+Previews use raw image pixel dimensions, ignoring embedded DPI and the
+renderer's display-scale multiplier. Images that fit are not enlarged;
+larger images shrink proportionally to fit their window. Sizes are rounded
+down to whole terminal cells, with a minimum of one cell. Resizing the
+window recalculates the fit. Each side fits its own window independently.

@@ -426,8 +426,7 @@ function DiffView:update_conflict_navigation_winbar()
     if not prefix then
       prefix, suffix = base:match("^(%s*WORKING TREE)(.*)$")
     end
-    local decorated = prefix and (prefix .. "  " .. buttons .. suffix)
-      or (base .. "  " .. buttons)
+    local decorated = prefix and (prefix .. "  " .. buttons .. suffix) or (base .. "  " .. buttons)
     file.winbar = decorated
 
     if win.id and api.nvim_win_is_valid(win.id) and win:show_winbar_info() then

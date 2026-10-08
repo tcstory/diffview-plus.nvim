@@ -276,6 +276,8 @@ Window.open_file = async.void(function(self)
 
   self.emitter:emit("post_open")
 
+  require("diffview.scene.image").attach(self.file.bufnr)
+
   api.nvim_win_call(self.id, function()
     ctx.emitter:emit("diff_buf_win_enter", self.file.bufnr, self.id, {
       symbol = self.file.symbol,

@@ -304,6 +304,16 @@ File.create_buffer = async.wrap(function(self, callback)
       error(File.CANCELLED)
     end
 
+    -- Image previews participate in the same cancellation/concurrent-load
+    -- lifecycle as text buffers, before the binary-to-null fallback.
+    local image_buf = require("diffview.scene.image").create_buffer(self, File.bufopts)
+    if image_buf then
+      self.bufnr = image_buf
+      created_fresh_bufnr = image_buf
+      self:post_buf_created()
+      return
+    end
+
     -- Don't probe a nulled side: the result is unused (it routes to the NULL
     -- buffer below), and for a deleted file the gone `LOCAL` path makes
     -- `is_binary` false-positive, which would hide the deletion in inline.
