@@ -201,7 +201,9 @@ For the full list of options with defaults, see
 See [RECIPES.md](RECIPES.md) for ready-to-use configuration snippets covering
 PR review, merge conflicts, file history, and more.
 
-## Companion Plugins
+## Companion Tools
+
+### Neovim Plugins
 
 - **[diffchar.vim](https://github.com/rickhowe/diffchar.vim)** — VSCode-style
   character/word-level diff highlighting. Works out of the box.
@@ -215,6 +217,16 @@ PR review, merge conflicts, file history, and more.
   cursor in `diffview+`. See [RECIPES.md](RECIPES.md) for setup.
 - **[Neogit](https://github.com/NeogitOrg/neogit)** — Git porcelain with
   built-in diffview integration (`integrations = { diffview = true }`).
+
+### Recommended External GUI
+
+- **[Rebased](https://github.com/DetachHead/rebased)** — A lightweight, standalone
+  Git GUI client built on the IntelliJ platform (with all non-Git plugins stripped
+  and background indexing disabled). While `diffview+` provides a fast in-terminal
+  workflow for everyday reviews and conflict resolution, pairing it with Rebased
+  offers an exceptional GUI companion for complex interactive rebases, visual
+  branch graphs, and heavy 3-way merge resolution. See [RECIPES.md](RECIPES.md) for
+  a keymap recipe to launch it directly from Neovim.
 
 See [TIPS.md](TIPS.md) for setup details and known compatibility issues.
 

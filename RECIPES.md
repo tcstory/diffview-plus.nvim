@@ -350,4 +350,33 @@ it.
 
 </details>
 
+<details>
+<summary><b>External Git GUI: Rebased</b></summary>
+
+[Rebased](https://github.com/DetachHead/rebased) is a lightweight standalone Git
+desktop client built on the IntelliJ platform, with language plugins removed
+and background indexing disabled. While `diffview+` is ideal for staying in the
+terminal for daily diffs, reviews, and quick merge resolution, pairing it with
+Rebased gives you a powerful GUI for visual interactive rebases, large branch
+graphs, and complex 3-way conflict resolution.
+
+You can bind a keymap to launch Rebased for the current repository from Neovim:
+
+```lua
+vim.keymap.set("n", "<leader>gr", function()
+  local root = vim.fs.root(0, ".git") or vim.fn.getcwd()
+  local cmd = vim.fn.exepath("rebased")
+  if cmd == "" then
+    cmd = vim.fn.expand("~/Documents/Rebased-x86_64.AppImage")
+  end
+  if vim.fn.executable(cmd) == 1 then
+    vim.system({ cmd, root }, { detach = true })
+  else
+    vim.notify("Rebased binary not found: " .. cmd, vim.log.levels.WARN)
+  end
+end, { desc = "Open Rebased (Git GUI)" })
+```
+
+</details>
+
 <!-- vim: set tw=80 -->
