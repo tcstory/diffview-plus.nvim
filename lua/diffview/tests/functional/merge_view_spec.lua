@@ -136,9 +136,9 @@ describe("diffview.scene.views.diff.merge_view", function()
       eq(1, prev_res and prev_res.current)
 
       assert.truthy(result_file.winbar:find("[ OURS ]", 1, true))
-      assert.truthy(result_file.winbar:find("[ BASE ]", 1, true))
       assert.truthy(result_file.winbar:find("[ THEIRS ]", 1, true))
-      assert.truthy(result_file.winbar:find("[ ALL→OURS ]", 1, true))
+      assert.is_nil(result_file.winbar:find("[ BASE ]", 1, true))
+      assert.is_nil(result_file.winbar:find("[ ALL→OURS ]", 1, true))
 
       assert.is_true(view.panel:is_open())
       local expanded_width = vim.api.nvim_win_get_width(view.panel.winid)
@@ -171,7 +171,7 @@ describe("diffview.scene.views.diff.merge_view", function()
 
       assert.is_false(view:can_close({ force = false }))
 
-      router.dispatch_id(route_id(result_file.winbar, "[ ALL→OURS ]"))
+      router.dispatch_id(route_id(result_file.winbar, "[ OURS ]"))
       eq(0, view.merge_session:counts())
       eq(0, view.cur_entry.merge_conflicts_remaining)
       assert.is_true(view:apply_all())

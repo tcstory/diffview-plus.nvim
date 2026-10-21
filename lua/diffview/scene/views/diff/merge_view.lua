@@ -262,19 +262,10 @@ function MergeView:update_merge_ui()
     local apply = router.register({ owner = self._winbar_routes, action = "merge.merge_apply" })
     local nav_buttons = router.winbar(prev, "[ ◀ ]") .. " " .. router.winbar(next, "[ ▶ ]")
     local apply_label = unresolved == 0
-        and router.winbar(apply, "[ ✔ APPLY CHANGES ]", "DiffviewFilePanelInsertions")
+        and router.winbar(apply, "[ ✔ APPLY ]", "DiffviewFilePanelInsertions")
       or router.winbar(apply, "[ APPLY ]")
     local action_buttons = {}
-    for _, choice in ipairs({ "ours", "base", "theirs", "all", "manual" }) do
-      local route = router.register({
-        owner = self._winbar_routes,
-        handler = function()
-          return self:choose_active_conflict(choice)
-        end,
-      })
-      action_buttons[#action_buttons + 1] = router.winbar(route, ("[ %s ]"):format(choice:upper()))
-    end
-    for _, choice in ipairs({ "ours", "base", "theirs" }) do
+    for _, choice in ipairs({ "ours", "theirs" }) do
       local route = router.register({
         owner = self._winbar_routes,
         handler = function()
@@ -282,8 +273,7 @@ function MergeView:update_merge_ui()
           return true
         end,
       })
-      action_buttons[#action_buttons + 1] =
-        router.winbar(route, ("[ ALL→%s ]"):format(choice:upper()))
+      action_buttons[#action_buttons + 1] = router.winbar(route, ("[ %s ]"):format(choice:upper()))
     end
     local counts = ("  %%<FILE %d/%d unresolved | ALL %d/%d"):format(
       file_remaining,
@@ -320,11 +310,11 @@ function MergeView:update_merge_ui()
         .. router.winbar(discard, "[ DISCARD ]")
     end
     entry_layout.b.file.winbar = "RESULT  "
+      .. apply_label
+      .. "  "
       .. nav_buttons
       .. "  "
       .. table.concat(action_buttons, " ")
-      .. "  "
-      .. apply_label
       .. counts
       .. banner
     local current_layout = self.cur_layout --[[@as Diff1|Diff2|Diff3|Diff4|nil]]

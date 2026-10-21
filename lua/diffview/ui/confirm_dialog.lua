@@ -10,7 +10,7 @@ function M.component(prompt)
   return component.new({
     identity = "confirm-dialog",
     text = prompt,
-    tooltip = "Choose Continue to perform this action.",
+    tooltip = "Choose Yes to perform this action.",
   })
 end
 
@@ -18,7 +18,7 @@ end
 ---@return boolean
 function M.ask(prompt)
   M.component(prompt)
-  return vim.fn.confirm(prompt, "&Cancel\n&Continue", 1, "Warning") == 2
+  return vim.fn.confirm(prompt, "&Yes\n&No", 1, "Warning") == 1
 end
 
 return M
